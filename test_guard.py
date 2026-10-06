@@ -5,7 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from main import (
+from guard import (
     DEMO_POLICY,
     ExecutionGuard,
     Mode,
@@ -29,12 +29,12 @@ def inspector():
 
 @pytest.fixture
 def make_guard(inspector):
-    def _make(mode=Mode.BLOCK, judge=None):
+    def _make(mode = Mode.BLOCK, judge = None):
         tools = {
             'run_sql': lambda query: f'ran: {query}',
             'read_file': lambda path: f'<{path}>',
         }
-        g = ExecutionGuard(inspector, PlanAnalyzer(judge=judge), mode, tools)
+        g = ExecutionGuard(inspector, PlanAnalyzer(judge = judge), mode, tools)
         g.start('t')
         return g
 
@@ -52,7 +52,7 @@ def test_policy_violation_joins_reasons():
 # Trajectory (properties)
 
 def _traj(*events):
-    t = Trajectory(name='x')
+    t = Trajectory(name = 'x')
     t.events = list(events)
     return t
 
@@ -64,22 +64,22 @@ def test_trajectory_plan_events():
 
 def test_trajectory_has_step_violation():
     assert not _traj(StepEvent(0, 'plan'), StepEvent(1, 'tool_call')).has_step_violation
-    assert _traj(StepEvent(0, 'plan', violations=['x'])).has_step_violation
-    assert _traj(StepEvent(0, 'tool_call', violations=['x'])).has_step_violation
-    assert not _traj(StepEvent(0, 'final', violations=['x'])).has_step_violation
+    assert _traj(StepEvent(0, 'plan', violations = ['x'])).has_step_violation
+    assert _traj(StepEvent(0, 'tool_call', violations = ['x'])).has_step_violation
+    assert not _traj(StepEvent(0, 'final', violations = ['x'])).has_step_violation
 
 
 def test_trajectory_has_executed_violation():
-    executed = _traj(StepEvent(0, 'tool_call', violations=['x'], blocked=False))
-    blocked = _traj(StepEvent(0, 'tool_call', violations=['x'], blocked=True))
-    plan_only = _traj(StepEvent(0, 'plan', violations=['x']))
+    executed = _traj(StepEvent(0, 'tool_call', violations = ['x'], blocked = False))
+    blocked = _traj(StepEvent(0, 'tool_call', violations = ['x'], blocked = True))
+    plan_only = _traj(StepEvent(0, 'plan', violations = ['x']))
     assert executed.has_executed_violation
     assert not blocked.has_executed_violation
     assert not plan_only.has_executed_violation
 
 
 def test_trajectory_has_block():
-    assert _traj(StepEvent(0, 'tool_call', blocked=True)).has_block
+    assert _traj(StepEvent(0, 'tool_call', blocked = True)).has_block
     assert not _traj(StepEvent(0, 'tool_call')).has_block
 
 
@@ -192,7 +192,7 @@ def test_plan_analyzer_judge_used_only_if_no_pattern():
         calls.append(text)
         return True
 
-    a = PlanAnalyzer(judge=judge)
+    a = PlanAnalyzer(judge = judge)
     assert a.check('harmless text') == ['flagged by LLM judge']
     assert calls == ['harmless text']
 
@@ -202,7 +202,7 @@ def test_plan_analyzer_judge_used_only_if_no_pattern():
 
 
 def test_plan_analyzer_judge_false():
-    assert PlanAnalyzer(judge=lambda t: False).check('an ordinary plan') == []
+    assert PlanAnalyzer(judge = lambda t: False).check('an ordinary plan') == []
 
 
 # ExecutionGuard
@@ -210,7 +210,7 @@ def test_plan_analyzer_judge_false():
 
 def test_start_creates_trajectory(make_guard):
     g = make_guard()
-    t = g.start('new', is_malicious_task=True)
+    t = g.start('new', is_malicious_task = True)
     assert t.name == 'new' and t.is_malicious_task and t.events == []
     assert g.traj is t
 
@@ -249,20 +249,20 @@ def test_before_tool_call_clean(make_guard):
 
 
 def test_call_tool_executes_when_allowed(make_guard):
-    assert make_guard().call_tool('run_sql', query='SELECT 1') == 'ran: SELECT 1'
+    assert make_guard().call_tool('run_sql', query = 'SELECT 1') == 'ran: SELECT 1'
 
 
 def test_call_tool_raises_when_blocked(make_guard):
     g = make_guard(Mode.BLOCK)
     with pytest.raises(PolicyViolation) as exc:
-        g.call_tool('run_sql', query='DROP TABLE t')
+        g.call_tool('run_sql', query = 'DROP TABLE t')
     assert 'DROP' in str(exc.value)
     assert g.traj.events[-1].blocked
 
 
 def test_call_tool_executes_in_log_only(make_guard):
     g = make_guard(Mode.LOG_ONLY)
-    assert g.call_tool('run_sql', query='DROP TABLE t') == 'ran: DROP TABLE t'
+    assert g.call_tool('run_sql', query = 'DROP TABLE t') == 'ran: DROP TABLE t'
     assert g.traj.events[-1].violations
 
 
@@ -280,8 +280,8 @@ def test_guarded_decorator_blocks_and_passes(make_guard):
     def run_sql(query):
         return f'real: {query}'
 
-    assert run_sql(query='SELECT 1') == 'real: SELECT 1'
-    out = run_sql(query='DROP TABLE t')
+    assert run_sql(query = 'SELECT 1') == 'real: SELECT 1'
+    out = run_sql(query = 'DROP TABLE t')
     assert out.startswith('[BLOCKED by Agent-Execution-Guard:')
 
 
@@ -311,7 +311,7 @@ def test_guarded_decorator_log_only_still_executes(make_guard):
 # compute_metrics
 
 def _mal(final_unsafe=False, events=()):
-    t = Trajectory(name='m', is_malicious_task=True, final_unsafe=final_unsafe)
+    t = Trajectory(name = 'm', is_malicious_task = True, final_unsafe = final_unsafe)
     t.events = list(events)
     return t
 
@@ -330,8 +330,8 @@ def test_metrics_final_asr():
 
 
 def test_metrics_icr_counts_executed_with_clean_final():
-    executed = StepEvent(0, 'tool_call', violations=['x'])
-    blocked = StepEvent(0, 'tool_call', violations=['x'], blocked=True)
+    executed = StepEvent(0, 'tool_call', violations = ['x'])
+    blocked = StepEvent(0, 'tool_call', violations = ['x'], blocked = True)
     trajs = [
         _mal(False, [executed]),
         _mal(True, [executed]),
@@ -354,15 +354,15 @@ def test_metrics_unsafe_planning_rate():
 
 
 def test_metrics_benign_false_positive_and_utility():
-    b1 = Trajectory(name='b1', events=[StepEvent(0, 'tool_call', violations=['x'], blocked=True)])
-    b2 = Trajectory(name='b2', events=[StepEvent(0, 'tool_call')])
+    b1 = Trajectory(name = 'b1', events = [StepEvent(0, 'tool_call', violations = ['x'], blocked = True)])
+    b2 = Trajectory(name = 'b2', events = [StepEvent(0, 'tool_call')])
     m = compute_metrics([b1, b2])
     assert m['False positive rate (benign)'] == 0.5
     assert m['Utility (benign not blocked)'] == 0.5
 
 
 def test_metrics_benign_do_not_affect_attack_metrics():
-    b = Trajectory(name='b', final_unsafe=True)
+    b = Trajectory(name = 'b', final_unsafe = True)
     m = compute_metrics([b, _mal(False)])
     assert m['Final ASR'] == 0
 

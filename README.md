@@ -32,24 +32,24 @@ Runs a demo on 5 scripted scenarios (no API keys needed) and prints metrics with
 from guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
 
 policy = {
-    "default": "deny",
-    "tools": {
-        "read_file": {"deny_regex": {"path": r"\.env|id_rsa|/etc/passwd"}},
-        "http_post": {"allow_domains": {"url": ["api.internal.example.com"]}},
-        "run_sql":   {"sql_ops": {"query": ["SELECT"]}},
+    'default': 'deny',
+    'tools': {
+        'read_file': {'deny_regex': {'path': r'\.env|id_rsa|/etc/passwd'}},
+        'http_post': {'allow_domains': {'url': ['api.internal.example.com']}},
+        'run_sql':   {'sql_ops': {'query': ['SELECT']}},
     },
 }
 
 guard = ExecutionGuard(ToolPolicyInspector(policy), PlanAnalyzer(), Mode.BLOCK)
-guard.start("my-run", is_malicious_task=False)
+guard.start('my-run', is_malicious_task = False)
 
-@guard.guarded("run_sql")
+@guard.guarded('run_sql')
 def run_sql(query: str):
     ...
 
 guard.before_plan("I'll read the table and compute the total.")
-run_sql(query="SELECT COUNT(*) FROM users")   # allowed
-run_sql(query="DROP TABLE users")             # returns a [BLOCKED ...] message
+run_sql(query = 'SELECT COUNT(*) FROM users')   # allowed
+run_sql(query = 'DROP TABLE user')             # returns a [BLOCKED ...] message
 ```
 
 ## Metrics
