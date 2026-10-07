@@ -74,6 +74,31 @@ class ToolPolicyInspector:
             return value.rsplit('@', 1)[1].lower()
         return(urlparse(value).hostname or '').lower()
 
+    def _sql_violations(self, tool: str, arg: str, query: str, ops: list[str]) -> list[str]:
+        import sqlglot
+        from sqlglot import exp
+
+        if not query.strip():
+            return []
+        allowed = {o.upper() for o in ops}
+        try:
+            stmts = [s for s in sqlglot.parse(query) if s is not None]
+        except sqlglot.errors.SqlglotError:
+            return [f'{tool}.{arg} SQL cannot be parsed']
+
+        query_types = (exp.Select, exp.Union, exp.Except, exp.Intersect)
+        write_types = (exp.Insert, exp.Update, exp.Delete, exp.Drop, exp.Create)
+        out: list[str] = []
+        for s in stmts:
+            op = 'SELECT' if isinstance(s, query_types) else type(s).__name__.upper()
+            if op not in allowed:
+                out.append(f'{tool}.{arg} SQL op "{op}" not allowed')
+            for node in s.find_all(*write_types):
+                nop = type(node).__name__.upper()
+                if node is not s and nop not in allowed:
+                    out.append(f'{tool}.{arg} nested SQL op "{nop}" not allowed')
+        return out
+
     def check(self, tool: str, args: dict[str, Any]) -> list[str]:
         rule = self.tools.get(tool)
         if rule is None:
@@ -90,11 +115,7 @@ class ToolPolicyInspector:
                 out.append(f'{tool}.{arg} host "{host}" not in allowed domains')
 
         for arg, ops in rule.get('sql_ops', {}).items():
-            stmts = [s.strip() for s in str(args.get(arg,'')).split(';') if s.strip()]
-            for s  in stmts:
-                op = s.split()[0].upper() if s.split() else ''
-                if op not in {o.upper() for o in ops}:
-                    out.append(f'{tool}.{arg} SQL op "{op}" not allowed')
+            out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), ops))
 
         return out
 

@@ -154,6 +154,23 @@ def test_check_sql_empty_query(inspector):
     assert inspector.check('run_sql', {'query': ''}) == []
 
 
+@pytest.mark.parametrize('q', [
+    '/* x */ DROP TABLE users',
+    "SELECT ';'; DROP TABLE users",
+    'SELECT 1; DELETE FROM users',
+    'WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d',
+    'DROP TABLE users',
+])
+def test_sql_bypasses_blocked(inspector, q):
+    assert inspector.check('run_sql', {'query': q})
+
+
+def test_sql_select_ok(inspector):
+    assert inspector.check('run_sql', {'query': 'select 1'}) == []
+    assert inspector.check('run_sql', {'query': "SELECT ';' AS x"}) == []
+    assert inspector.check('run_sql', {'query': 'SELECT 1 UNION SELECT 2'}) == []
+
+
 def test_check_multiple_violations_collected():
     insp = ToolPolicyInspector({'tools': {'t': {'deny_regex': {'a': 'bad'}, 'allow_domains': {'u': ['ok.com']}}}})
     assert len(insp.check('t', {'a': 'bad', 'u': 'https://evil.io'})) == 2
