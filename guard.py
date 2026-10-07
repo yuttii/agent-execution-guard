@@ -178,7 +178,7 @@ class ExecutionGuard:
         self.traj.final_unsafe = unsafe
         return self._add(kind= 'final', content = text)
 
-    def guarded(self, name: str | Callable | None = None):
+    def guarded(self, name: str | Callable | None = None, *, on_block: str = 'message'):
         def make(fn: Callable, tool_name: str) -> Callable:
             sig = inspect.signature(fn)
 
@@ -186,7 +186,9 @@ class ExecutionGuard:
             def wrapper(*a, **kw):
                 ev = self.before_tool_call(tool_name, _collect_args(sig, a, kw))
                 if ev.blocked:
-                    return f'[BLOCKED by Agent-Execution-Guard: {';'.join(ev.violations)}]'
+                    if on_block == 'raise':
+                        raise PolicyViolation(ev.violations)
+                    return f'[BLOCKED by Agent-Execution-Guard: {'; '.join(ev.violations)}]'
                 return fn(*a, **kw)
 
             return wrapper

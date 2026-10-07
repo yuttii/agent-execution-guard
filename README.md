@@ -52,6 +52,9 @@ run_sql(query = 'SELECT COUNT(*) FROM users')   # allowed
 run_sql(query = 'DROP TABLE user')             # returns a [BLOCKED ...] message
 ```
 
+`call_tool` always raises `PolicyViolation` when blocked; `@guard.guarded` returns a `[BLOCKED ...]` message by default, or raises with `on_block='raise'`.
+
+
 ## Metrics
 
 | Metric | Meaning |

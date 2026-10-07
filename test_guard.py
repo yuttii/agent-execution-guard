@@ -294,7 +294,7 @@ def test_guarded_decorator_uses_function_name_and_keeps_metadata(make_guard):
         return path
 
     assert read_file.__name__ == 'read_file' and read_file.__doc__ == 'doc'
-    assert read_file(path='/data/a.txt') == '/data/a.txt'
+    assert read_file(path = '/data/a.txt') == '/data/a.txt'
     assert g.traj.events[-1].tool == 'read_file'
 
 
@@ -305,9 +305,9 @@ def test_guarded_decorator_log_only_still_executes(make_guard):
     def run_sql(query):
         return 'executed'
 
-    assert run_sql(query='DROP TABLE t') == 'executed'
-    
-        
+    assert run_sql(query = 'DROP TABLE t') == 'executed'
+
+
 def test_guarded_checks_positional_args(make_guard):
     g = make_guard(Mode.BLOCK)
 
@@ -322,7 +322,7 @@ def test_guarded_checks_default_args(make_guard):
     g = make_guard(Mode.BLOCK)
 
     @g.guarded('run_sql')
-    def run_sql(query='DROP TABLE t'):
+    def run_sql(query = 'DROP TABLE t'):
         return 'executed'
 
     assert run_sql().startswith('[BLOCKED')
@@ -334,7 +334,33 @@ def test_guarded_flattens_kwargs(make_guard):
     def run_sql(**kw):
         return 'executed'
 
-    assert run_sql(query='DROP TABLE t').startswith('[BLOCKED')
+    assert run_sql(query = 'DROP TABLE t').startswith('[BLOCKED')
+
+
+def test_guarded_on_block_message_is_default(make_guard):
+    g = make_guard(Mode.BLOCK)
+
+    @g.guarded('run_sql')
+    def run_sql(query):
+         return 'executed'
+
+    out = run_sql('DROP TABLE t')
+    assert isinstance(out, str)
+    assert out.startswith('[BLOCKED by Agent-Execution-Guard:')
+    assert 'DROP' in out
+
+
+def test_guarded_on_block_raise(make_guard):
+    g = make_guard(Mode.BLOCK)
+
+    @g.guarded('run_sql', on_block = 'raise')
+    def run_sql(query):
+        return 'executed'
+
+    with pytest.raises(PolicyViolation) as exc:
+        run_sql('DROP TABLE t')
+    assert 'DROP' in str(exc.value)
+    assert run_sql('SELECT 1') == 'executed'
 
 
 # compute_metrics
