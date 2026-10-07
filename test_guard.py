@@ -306,6 +306,35 @@ def test_guarded_decorator_log_only_still_executes(make_guard):
         return 'executed'
 
     assert run_sql(query='DROP TABLE t') == 'executed'
+    
+        
+def test_guarded_checks_positional_args(make_guard):
+    g = make_guard(Mode.BLOCK)
+
+    @g.guarded('run_sql')
+    def run_sql(query):
+        return 'executed'
+
+    assert run_sql('DROP TABLE t').startswith('[BLOCKED')
+    assert run_sql('SELECT 1') == 'executed'
+
+def test_guarded_checks_default_args(make_guard):
+    g = make_guard(Mode.BLOCK)
+
+    @g.guarded('run_sql')
+    def run_sql(query='DROP TABLE t'):
+        return 'executed'
+
+    assert run_sql().startswith('[BLOCKED')
+
+def test_guarded_flattens_kwargs(make_guard):
+    g = make_guard(Mode.BLOCK)
+
+    @g.guarded('run_sql')
+    def run_sql(**kw):
+        return 'executed'
+
+    assert run_sql(query='DROP TABLE t').startswith('[BLOCKED')
 
 
 # compute_metrics
