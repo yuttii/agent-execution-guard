@@ -248,6 +248,20 @@ def test_before_tool_call_clean(make_guard):
     assert ev.violations == [] and not ev.blocked
 
 
+def test_warn_mode_logs_warning(make_guard, caplog):
+    g = make_guard(Mode.WARN)
+    with caplog.at_level('WARNING', logger = 'agent_execution_guard'):
+        g.before_tool_call('run_sql', {'query': 'DROP TABLE t'})
+    assert 'DROP' in caplog.text
+
+
+def test_log_only_mode_has_no_warnings(make_guard, caplog):
+    g = make_guard(Mode.LOG_ONLY)
+    with caplog.at_level('WARNING', logger = 'agent_execution_guard'):
+        g.before_tool_call('run_sql', {'query': 'DROP TABLE t'})
+    assert caplog.text == ''
+
+
 def test_call_tool_executes_when_allowed(make_guard):
     assert make_guard().call_tool('run_sql', query = 'SELECT 1') == 'ran: SELECT 1'
 

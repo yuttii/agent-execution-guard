@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import functools
-import re
 import inspect
+import logging
+import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable
 from urllib.parse import urlparse
+
+
+logger = logging.getLogger('agent_execution_guard')
 
 
 # event models
@@ -154,10 +158,22 @@ class ExecutionGuard:
         self.traj.events.append(ev)
         return ev
 
+    def _report(self, ev: StepEvent) -> None:
+        if not ev.violations:
+            return
+        msg = f'step {ev.idx} {ev.tool or ev.kind}: {'; '.join(ev.violations)}'
+        if ev.blocked:
+            logger.warning('BLOCKED %s', msg)
+        elif self.mode is Mode.WARN:
+            logger.warning('%s', msg)
+        else:
+            logger.info('%s', msg)
+
     #hooks
     def before_plan(self, text: str) -> StepEvent:
         ev = self._add(kind= 'plan', content= text)
         ev.violations = self.analyzer.check(text)
+        self._report(ev)
         return ev
 
     def before_tool_call(self, tool: str, args: dict[str, Any]) -> StepEvent:
@@ -165,6 +181,7 @@ class ExecutionGuard:
         ev.violations = self.inspector.check(tool, args)
         if ev.violations and self.mode is Mode.BLOCK:
             ev.blocked = True
+        self._report(ev)
         return ev
 
     def call_tool(self, tool:str, **args) -> Any:
