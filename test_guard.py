@@ -171,6 +171,50 @@ def test_sql_select_ok(inspector):
     assert inspector.check('run_sql', {'query': 'SELECT 1 UNION SELECT 2'}) == []
 
 
+def _path_inspector(root):
+    return ToolPolicyInspector({'tools': {'read_file': {'allow_paths': {'path': [str(root)]}}}})
+
+
+def test_allow_paths_inside_root(tmp_path):
+    insp = _path_inspector(tmp_path)
+    assert insp.check('read_file', {'path': str(tmp_path / 'a.txt')}) == []
+
+
+def test_allow_paths_travesal_blocked(tmp_path):
+    root = tmp_path / 'data'
+    root.mkdir()
+    insp = _path_inspector(root)
+    assert insp.check('read_file', {'path': str(root / '..' / 'secret')})
+
+
+def test_allow_paths_lookalike_dir_blocked(tmp_path):
+    root = tmp_path / 'data'
+    root.mkdir()
+    insp = _path_inspector(root)
+    assert insp.check('read_file', {'path': str(tmp_path / 'data2' / 'x.txt')})
+
+
+def test_allow_paths_symlink_escape_blocked(tmp_path):
+    root = tmp_path / 'data'
+    root.mkdir()
+    outside = tmp_path / 'outside'
+    outside.mkdir()    
+    link = root / 'link'
+    try:
+        link.symlink_to(outside, target_is_directory = True)
+    except:
+        pytest.skip('symlinks not available on this system')
+    insp = _path_inspector(root)
+    assert insp.check('read_file', {'path': str(link / 'x.txt')})
+
+
+def test_allow_paths_null_byte_and_empty_blocked(tmp_path):
+    insp = _path_inspector(tmp_path)
+    assert insp.check('read_file', {'path': str(tmp_path / 'a\x00.txt')})
+    assert insp.check('read_file', {'path': ''})
+    assert insp.check('read_file', {})
+
+
 def test_check_multiple_violations_collected():
     insp = ToolPolicyInspector({'tools': {'t': {'deny_regex': {'a': 'bad'}, 'allow_domains': {'u': ['ok.com']}}}})
     assert len(insp.check('t', {'a': 'bad', 'u': 'https://evil.io'})) == 2

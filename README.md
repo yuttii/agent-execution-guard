@@ -37,6 +37,7 @@ policy = {
         'read_file': {'deny_regex': {'path': r'\.env|id_rsa|/etc/passwd'}},
         'http_post': {'allow_domains': {'url': ['api.internal.example.com']}},
         'run_sql':   {'sql_ops': {'query': ['SELECT']}},
+        'read_file': {'allow_paths': {'path': ['/data']}, 'deny_regex': {'path': r'\.env|id_rsa'}},
     },
 }
 
@@ -77,6 +78,8 @@ python -m pytest -v
 - The demo uses scripted scenarios and mock tools, not a real agent. Its numbers show that the mechanics work, not real-world effectiveness.
 - Pattern-based plan checks can be bypassed by rephrasing. Use an LLM judge and benchmarks such as AgentDojo or AgentHarm for real evaluation.
 - Reasoning traces are not available for every model and may not reflect actual behavior, so the plan analyzer is best treated as observability, not enforcement.
+- `allow_paths` resolves paths with `Path.resolve()`. Relative paths are resolved against the process working directory, so pass absolute paths.
+- There is a gap between the path check and the actual file read (TOCTOU): a symlink could be swapped in between. For stronger guarantees, pass the already-resolved path to the tool.
 
 ## Roadmap
 

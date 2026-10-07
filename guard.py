@@ -6,6 +6,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
@@ -74,6 +75,17 @@ class ToolPolicyInspector:
             return value.rsplit('@', 1)[1].lower()
         return(urlparse(value).hostname or '').lower()
 
+    @staticmethod
+    def _path_allowed(value: str, roots: list[str]) -> bool:
+        if not value.strip() or '\x00' in value:
+            return False
+        try:
+            p = Path(value).resolve()
+            resolved_roots = [Path(r).resolve() for r in roots]
+        except (OSError, RuntimeError, ValueError):
+            return False
+        return any(p == r or r in p.parents for r in resolved_roots)
+
     def _sql_violations(self, tool: str, arg: str, query: str, ops: list[str]) -> list[str]:
         import sqlglot
         from sqlglot import exp
@@ -113,6 +125,10 @@ class ToolPolicyInspector:
             host = self._host(str(args.get(arg,'')))
             if not any(host == d or host.endswith("." + d) for d in domains):
                 out.append(f'{tool}.{arg} host "{host}" not in allowed domains')
+
+        for arg, roots in rule.get('allow_paths', {}).items():
+            if not self._path_allowed(str(args.get(arg, '')), roots):
+                out.append(f'{tool}.{arg} path not in allowed roots')
 
         for arg, ops in rule.get('sql_ops', {}).items():
             out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), ops))
