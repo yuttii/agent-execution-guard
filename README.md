@@ -81,6 +81,7 @@ python -m pytest -v
 - `allow_paths` resolves paths with `Path.resolve()`. Relative paths are resolved against the process working directory, so pass absolute paths.
 - There is a gap between the path check and the actual file read (TOCTOU): a symlink could be swapped in between. For stronger guarantees, pass the already-resolved path to the tool.
 - URL checks validate the string only, not the final IP after DNS resolution or redirects, so DNS rebinding and open redirects are not covered.
+- Regex rules on code (`deny_regex` for tools like `execute_code`) are not a security boundary and are trivially bypassed. Run untrusted code only in a sandbox (a container with no network and a restricted filesystem), or deny the tool entirely. In the demo policy `execute_code` is denied by default.
 
 ## Roadmap
 

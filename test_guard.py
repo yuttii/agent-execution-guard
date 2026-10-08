@@ -225,7 +225,7 @@ def test_url_http_scheme_blocked():
     assert res and 'scheme' in res[0]
 
 
-def test_ur_https_ok_and_case_insensitive():
+def test_url_https_ok_and_case_insensitive():
     insp = _url_inspector()
     assert insp.check('http_post', {'url': 'https://EXAMPLE.com/x'}) == []
 
@@ -249,6 +249,18 @@ def test_url_ip_blocked_even_if_in_allowlist():
     insp = _url_inspector(domains = ('127.0.0.1'))
     res = insp.check('http_post', {'url': 'https://127.0.0.1'})
     assert any('IP address' in r for r in res)
+
+
+def test_execute_code_denied_by_default(inspector):
+    assert inspector.check('execute_code', {'code': 'print(1)'}) == [
+        'tool "execute_code" not in allowlist'
+    ]
+
+
+@pytest.mark.xfail(reason = 'deny_regex is trivially bypassable; use a sandbox or deny the tool')
+def test_execute_code_regex_is_not_a_boundary():
+    insp = ToolPolicyInspector({'tools': {'execute_code': {'deny_regex': {'code': r'os\.system'}}}})
+    assert insp.check('execute_code', {'code': "__import__('o'+'s').system('id')"})
 
 
 def test_email_not_affected_by_url_checks(inspector):

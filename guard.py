@@ -71,10 +71,33 @@ class ToolPolicyInspector:
         self.tools: dict[str,dict] = policy.get('tools', {})
 
     @staticmethod
+    def _as_list(value: Any) -> list[Any]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, (list, tuple, set)):
+            return list(value)
+        origin = getattr(value, '__origin__', None)
+        args = getattr(value, '__args__', ())
+        if origin in (list, tuple, set):
+            items: list[Any] = []
+            for arg in args:
+                if isinstance(arg, (list, tuple, set)):
+                    items.extend(ToolPolicyInspector._as_list(arg))
+                else:
+                    items.append(arg)
+            return items
+        return [value]
+
+    @staticmethod
     def _host(value: str) -> str:
-        if '@' in value and '://' not in value:     #email
+        if '@' in value and '://' not in value:     # email
             return value.rsplit('@', 1)[1].lower().rstrip('.')
-        return(urlparse(value).hostname or '').lower().rstrip('.')
+        parsed = urlparse(value)
+        if parsed.hostname:
+            return parsed.hostname.lower().rstrip('.')
+        return ''
 
     @staticmethod
     def _url_problems(value: str, schemes: list[str]) -> list[str]:
@@ -83,13 +106,14 @@ class ToolPolicyInspector:
         probs: list[str] = []
         if u.scheme not in schemes:
             probs.append(f'scheme "{u.scheme}" not allowed')
-        if host == 'localhost':
+        if host in {'localhost', '127.0.0.1', '::1'}:
             probs.append('localhost not allowed')
-        try:
-            ipaddress.ip_address(host)
-            probs.append('IP address host not allowed')
-        except ValueError:
-            pass
+        if host:
+            try:
+                ipaddress.ip_address(host)
+                probs.append('IP address host not allowed')
+            except ValueError:
+                pass
         return probs
 
     @staticmethod
@@ -141,18 +165,20 @@ class ToolPolicyInspector:
         for arg, domains in rule.get('allow_domains', {}).items():
             value = str(args.get(arg, ''))
             host = self._host(value)
-            if not any(host == d or host.endswith('.' + d) for d in domains):
+            allowed_domains = self._as_list(domains)
+            if not any(host == d or host.endswith('.' + d) for d in allowed_domains):
                 out.append(f'{tool}.{arg} host "{host}" not in allowed domains')
             if '://' in value:
-                for prob in self._url_problems(value, rule.get('allow_schemes', [https])):
+                for prob in self._url_problems(value, rule.get('allow_schemes', ['https'])):
                     out.append(f'{tool}.{arg} {prob}')
 
         for arg, roots in rule.get('allow_paths', {}).items():
-            if not self._path_allowed(str(args.get(arg, '')), roots):
+            allowed_roots = self._as_list(roots)
+            if not self._path_allowed(str(args.get(arg, '')), allowed_roots):
                 out.append(f'{tool}.{arg} path not in allowed roots')
 
         for arg, ops in rule.get('sql_ops', {}).items():
-            out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), ops))
+            out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), self._as_list(ops)))
 
         return out
 
@@ -219,7 +245,7 @@ class ExecutionGuard:
     def _report(self, ev: StepEvent) -> None:
         if not ev.violations:
             return
-        msg = f'step {ev.idx} {ev.tool or ev.kind}: {'; '.join(ev.violations)}'
+        msg = f"step {ev.idx} {ev.tool or ev.kind}: {'; '.join(ev.violations)}"
         if ev.blocked:
             logger.warning('BLOCKED %s', msg)
         elif self.mode is Mode.WARN:
@@ -263,7 +289,7 @@ class ExecutionGuard:
                 if ev.blocked:
                     if on_block == 'raise':
                         raise PolicyViolation(ev.violations)
-                    return f'[BLOCKED by Agent-Execution-Guard: {'; '.join(ev.violations)}]'
+                    return f"[BLOCKED by Agent-Execution-Guard: {'; '.join(ev.violations)}]"
                 return fn(*a, **kw)
 
             return wrapper
@@ -316,7 +342,6 @@ DEMO_POLICY = {
         'http_post': {'allow_domains': {'url': ['api.internal.example.com']}},
         'send_email': {'allow_domains': {'to': ['example.com']}},
         'run_sql': {'sql_ops': {'query': ['SELECT']}},
-        'execute_code': {'deny_regex': {'code': r'os\.system|subprocess|rm -rf'}},
     }
 }
 
