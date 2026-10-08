@@ -215,6 +215,46 @@ def test_allow_paths_null_byte_and_empty_blocked(tmp_path):
     assert insp.check('read_file', {})
 
 
+def _url_inspector(domains = ('example.com',)):
+    return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list[domains]}}}})
+
+
+def test_url_http_scheme_blocked():
+    insp = _url_inspector()
+    res = insp.check('http_post', {'url': 'http://example.com/x'})
+    assert res and 'scheme' in res[0]
+
+
+def test_ur_https_ok_and_case_insensitive():
+    insp = _url_inspector()
+    assert insp.check('http_post', {'url': 'https://EXAMPLE.com/x'}) == []
+
+
+def test_url_trailing_dot_normalized():
+    insp = _url_inspector()
+    assert insp.check('http_post', {'url': 'https://example.com/x'}) == []
+
+
+@pytest.mark.parametrize('url', [
+    'https://127.0.0.1/',
+    'https://169.254.169.254/latest/meta-data',
+    'https://localhost/',
+    'https://example.com@evil.site/',
+])
+def test_url_dangerous_hosts_blocked(url):
+    assert _url_inspector().check('http_post', {'url': url})
+
+
+def test_url_ip_blocked_even_if_in_allowlist():
+    insp = _url_inspector(domains = ('127.0.0.1'))
+    res = insp.check('http_post', {'url': 'https://127.0.0.1'})
+    assert any('IP address' in r for r in res)
+
+
+def test_email_not_affected_by_url_checks(inspector):
+    assert inspector.check('send_email', {'to': 'arina@example.com'}) == []
+
+
 def test_check_multiple_violations_collected():
     insp = ToolPolicyInspector({'tools': {'t': {'deny_regex': {'a': 'bad'}, 'allow_domains': {'u': ['ok.com']}}}})
     assert len(insp.check('t', {'a': 'bad', 'u': 'https://evil.io'})) == 2

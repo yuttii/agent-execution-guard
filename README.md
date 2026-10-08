@@ -80,6 +80,7 @@ python -m pytest -v
 - Reasoning traces are not available for every model and may not reflect actual behavior, so the plan analyzer is best treated as observability, not enforcement.
 - `allow_paths` resolves paths with `Path.resolve()`. Relative paths are resolved against the process working directory, so pass absolute paths.
 - There is a gap between the path check and the actual file read (TOCTOU): a symlink could be swapped in between. For stronger guarantees, pass the already-resolved path to the tool.
+- URL checks validate the string only, not the final IP after DNS resolution or redirects, so DNS rebinding and open redirects are not covered.
 
 ## Roadmap
 

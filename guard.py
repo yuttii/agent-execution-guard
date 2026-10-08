@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import ipaddress
 import logging
 import re
 from dataclasses import dataclass, field
@@ -72,8 +73,24 @@ class ToolPolicyInspector:
     @staticmethod
     def _host(value: str) -> str:
         if '@' in value and '://' not in value:     #email
-            return value.rsplit('@', 1)[1].lower()
-        return(urlparse(value).hostname or '').lower()
+            return value.rsplit('@', 1)[1].lower().rstrip('.')
+        return(urlparse(value).hostname or '').lower().rstrip('.')
+
+    @staticmethod
+    def _url_problems(value: str, schemes: list[str]) -> list[str]:
+        u = urlparse(value)
+        host = (u.hostname or '').lower().rstrip('.')
+        probs: list[str] = []
+        if u.scheme not in schemes:
+            probs.append(f'scheme "{u.scheme}" not allowed')
+        if host == 'localhost':
+            probs.append('localhost not allowed')
+        try:
+            ipaddress.ip_address(host)
+            probs.append('IP address host not allowed')
+        except ValueError:
+            pass
+        return probs
 
     @staticmethod
     def _path_allowed(value: str, roots: list[str]) -> bool:
@@ -122,9 +139,13 @@ class ToolPolicyInspector:
                 out.append(f'{tool}.{arg} matches denied pattern /{pattern}/')
 
         for arg, domains in rule.get('allow_domains', {}).items():
-            host = self._host(str(args.get(arg,'')))
-            if not any(host == d or host.endswith("." + d) for d in domains):
+            value = str(args.get(arg, ''))
+            host = self._host(value)
+            if not any(host == d or host.endswith('.' + d) for d in domains):
                 out.append(f'{tool}.{arg} host "{host}" not in allowed domains')
+            if '://' in value:
+                for prob in self._url_problems(value, rule.get('allow_schemes', [https])):
+                    out.append(f'{tool}.{arg} {prob}')
 
         for arg, roots in rule.get('allow_paths', {}).items():
             if not self._path_allowed(str(args.get(arg, '')), roots):
