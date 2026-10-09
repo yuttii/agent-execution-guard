@@ -1,4 +1,6 @@
+import asyncio
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -19,8 +21,8 @@ from guard import (
     run_scenarios,
 )
 
-
 # fixtures
+
 
 @pytest.fixture
 def inspector():
@@ -29,12 +31,12 @@ def inspector():
 
 @pytest.fixture
 def make_guard(inspector):
-    def _make(mode = Mode.BLOCK, judge = None):
+    def _make(mode=Mode.BLOCK, judge=None):
         tools = {
             'run_sql': lambda query: f'ran: {query}',
             'read_file': lambda path: f'<{path}>',
         }
-        g = ExecutionGuard(inspector, PlanAnalyzer(judge = judge), mode, tools)
+        g = ExecutionGuard(inspector, PlanAnalyzer(judge=judge), mode, tools)
         g.start('t')
         return g
 
@@ -42,6 +44,7 @@ def make_guard(inspector):
 
 
 # PolicyViolation
+
 
 def test_policy_violation_joins_reasons():
     exc = PolicyViolation(['a', 'b'])
@@ -51,8 +54,9 @@ def test_policy_violation_joins_reasons():
 
 # Trajectory (properties)
 
+
 def _traj(*events):
-    t = Trajectory(name = 'x')
+    t = Trajectory(name='x')
     t.events = list(events)
     return t
 
@@ -64,26 +68,27 @@ def test_trajectory_plan_events():
 
 def test_trajectory_has_step_violation():
     assert not _traj(StepEvent(0, 'plan'), StepEvent(1, 'tool_call')).has_step_violation
-    assert _traj(StepEvent(0, 'plan', violations = ['x'])).has_step_violation
-    assert _traj(StepEvent(0, 'tool_call', violations = ['x'])).has_step_violation
-    assert not _traj(StepEvent(0, 'final', violations = ['x'])).has_step_violation
+    assert _traj(StepEvent(0, 'plan', violations=['x'])).has_step_violation
+    assert _traj(StepEvent(0, 'tool_call', violations=['x'])).has_step_violation
+    assert not _traj(StepEvent(0, 'final', violations=['x'])).has_step_violation
 
 
 def test_trajectory_has_executed_violation():
-    executed = _traj(StepEvent(0, 'tool_call', violations = ['x'], blocked = False))
-    blocked = _traj(StepEvent(0, 'tool_call', violations = ['x'], blocked = True))
-    plan_only = _traj(StepEvent(0, 'plan', violations = ['x']))
+    executed = _traj(StepEvent(0, 'tool_call', violations=['x'], blocked=False))
+    blocked = _traj(StepEvent(0, 'tool_call', violations=['x'], blocked=True))
+    plan_only = _traj(StepEvent(0, 'plan', violations=['x']))
     assert executed.has_executed_violation
     assert not blocked.has_executed_violation
     assert not plan_only.has_executed_violation
 
 
 def test_trajectory_has_block():
-    assert _traj(StepEvent(0, 'tool_call', blocked = True)).has_block
+    assert _traj(StepEvent(0, 'tool_call', blocked=True)).has_block
     assert not _traj(StepEvent(0, 'tool_call')).has_block
 
 
 # ToolPolicyInspector._host
+
 
 @pytest.mark.parametrize(
     'value,expected',
@@ -99,6 +104,7 @@ def test_host_extraction(value, expected):
 
 
 # ToolPolicyInspector.check
+
 
 def test_check_unknown_tool_denied_by_default(inspector):
     assert inspector.check('format_disk', {}) == ['tool "format_disk" not in allowlist']
@@ -127,7 +133,9 @@ def test_check_allow_domains(inspector):
 
 
 def test_check_allow_domains_subdomain_and_lookalike():
-    insp = ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': ['example.com']}}}})
+    insp = ToolPolicyInspector(
+        {'tools': {'http_post': {'allow_domains': {'url': ['example.com']}}}}
+    )
     assert insp.check('http_post', {'url': 'https://a.b.example.com'}) == []
     assert insp.check('http_post', {'url': 'https://notexample.com'})
     assert insp.check('http_post', {'url': 'https://example.com.evil.io'})
@@ -154,13 +162,16 @@ def test_check_sql_empty_query(inspector):
     assert inspector.check('run_sql', {'query': ''}) == []
 
 
-@pytest.mark.parametrize('q', [
-    '/* x */ DROP TABLE users',
-    "SELECT ';'; DROP TABLE users",
-    'SELECT 1; DELETE FROM users',
-    'WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d',
-    'DROP TABLE users',
-])
+@pytest.mark.parametrize(
+    'q',
+    [
+        '/* x */ DROP TABLE users',
+        "SELECT ';'; DROP TABLE users",
+        'SELECT 1; DELETE FROM users',
+        'WITH d AS (DELETE FROM users RETURNING *) SELECT * FROM d',
+        'DROP TABLE users',
+    ],
+)
 def test_sql_bypasses_blocked(inspector, q):
     assert inspector.check('run_sql', {'query': q})
 
@@ -198,10 +209,10 @@ def test_allow_paths_symlink_escape_blocked(tmp_path):
     root = tmp_path / 'data'
     root.mkdir()
     outside = tmp_path / 'outside'
-    outside.mkdir()    
+    outside.mkdir()
     link = root / 'link'
     try:
-        link.symlink_to(outside, target_is_directory = True)
+        link.symlink_to(outside, target_is_directory=True)
     except:
         pytest.skip('symlinks not available on this system')
     insp = _path_inspector(root)
@@ -215,7 +226,7 @@ def test_allow_paths_null_byte_and_empty_blocked(tmp_path):
     assert insp.check('read_file', {})
 
 
-def _url_inspector(domains = ('example.com',)):
+def _url_inspector(domains=('example.com',)):
     return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list[domains]}}}})
 
 
@@ -235,18 +246,21 @@ def test_url_trailing_dot_normalized():
     assert insp.check('http_post', {'url': 'https://example.com/x'}) == []
 
 
-@pytest.mark.parametrize('url', [
-    'https://127.0.0.1/',
-    'https://169.254.169.254/latest/meta-data',
-    'https://localhost/',
-    'https://example.com@evil.site/',
-])
+@pytest.mark.parametrize(
+    'url',
+    [
+        'https://127.0.0.1/',
+        'https://169.254.169.254/latest/meta-data',
+        'https://localhost/',
+        'https://example.com@evil.site/',
+    ],
+)
 def test_url_dangerous_hosts_blocked(url):
     assert _url_inspector().check('http_post', {'url': url})
 
 
 def test_url_ip_blocked_even_if_in_allowlist():
-    insp = _url_inspector(domains = ('127.0.0.1'))
+    insp = _url_inspector(domains=('127.0.0.1'))
     res = insp.check('http_post', {'url': 'https://127.0.0.1'})
     assert any('IP address' in r for r in res)
 
@@ -257,10 +271,45 @@ def test_execute_code_denied_by_default(inspector):
     ]
 
 
-@pytest.mark.xfail(reason = 'deny_regex is trivially bypassable; use a sandbox or deny the tool')
+@pytest.mark.xfail(reason='deny_regex is trivially bypassable; use a sandbox or deny the tool')
 def test_execute_code_regex_is_not_a_boundary():
     insp = ToolPolicyInspector({'tools': {'execute_code': {'deny_regex': {'code': r'os\.system'}}}})
     assert insp.check('execute_code', {'code': "__import__('o'+'s').system('id')"})
+
+
+def test_threads_have_separate_trajectories(make_guard):
+    g = make_guard()
+    results = []
+
+    def work(n):
+        g.start(n)
+        g.before_plan('x')
+        results.append((n, g.traj.name, len(g.traj.events)))
+
+    threads = [threading.Thread(target=work, args=(f't{i}',)) for i in range(5)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    assert len(results) == 5
+    assert all(n == name and count == 1 for n, name, count in results)
+
+
+def test_asyncio_tasks_have_separate_trajectories(make_guard):
+    g = make_guard()
+
+    async def work(n):
+        g.start(n)
+        await asyncio.sleep(0)
+        g.before_plan('x')
+        await asyncio.sleep(0)
+        return g.traj.name, len(g.traj.events)
+
+    async def main():
+        return await asyncio.gather(work('a'), work('b'))
+
+    assert asyncio.run(main()) == [('a', 1), ('b', 1)]
 
 
 def test_email_not_affected_by_url_checks(inspector):
@@ -268,11 +317,14 @@ def test_email_not_affected_by_url_checks(inspector):
 
 
 def test_check_multiple_violations_collected():
-    insp = ToolPolicyInspector({'tools': {'t': {'deny_regex': {'a': 'bad'}, 'allow_domains': {'u': ['ok.com']}}}})
+    insp = ToolPolicyInspector(
+        {'tools': {'t': {'deny_regex': {'a': 'bad'}, 'allow_domains': {'u': ['ok.com']}}}}
+    )
     assert len(insp.check('t', {'a': 'bad', 'u': 'https://evil.io'})) == 2
 
 
 # PlanAnalyzer
+
 
 @pytest.mark.parametrize(
     'text',
@@ -305,7 +357,7 @@ def test_plan_analyzer_judge_used_only_if_no_pattern():
         calls.append(text)
         return True
 
-    a = PlanAnalyzer(judge = judge)
+    a = PlanAnalyzer(judge=judge)
     assert a.check('harmless text') == ['flagged by LLM judge']
     assert calls == ['harmless text']
 
@@ -315,7 +367,7 @@ def test_plan_analyzer_judge_used_only_if_no_pattern():
 
 
 def test_plan_analyzer_judge_false():
-    assert PlanAnalyzer(judge = lambda t: False).check('an ordinary plan') == []
+    assert PlanAnalyzer(judge=lambda t: False).check('an ordinary plan') == []
 
 
 # ExecutionGuard
@@ -323,7 +375,7 @@ def test_plan_analyzer_judge_false():
 
 def test_start_creates_trajectory(make_guard):
     g = make_guard()
-    t = g.start('new', is_malicious_task = True)
+    t = g.start('new', is_malicious_task=True)
     assert t.name == 'new' and t.is_malicious_task and t.events == []
     assert g.traj is t
 
@@ -363,33 +415,33 @@ def test_before_tool_call_clean(make_guard):
 
 def test_warn_mode_logs_warning(make_guard, caplog):
     g = make_guard(Mode.WARN)
-    with caplog.at_level('WARNING', logger = 'agent_execution_guard'):
+    with caplog.at_level('WARNING', logger='agent_execution_guard'):
         g.before_tool_call('run_sql', {'query': 'DROP TABLE t'})
     assert 'DROP' in caplog.text
 
 
 def test_log_only_mode_has_no_warnings(make_guard, caplog):
     g = make_guard(Mode.LOG_ONLY)
-    with caplog.at_level('WARNING', logger = 'agent_execution_guard'):
+    with caplog.at_level('WARNING', logger='agent_execution_guard'):
         g.before_tool_call('run_sql', {'query': 'DROP TABLE t'})
     assert caplog.text == ''
 
 
 def test_call_tool_executes_when_allowed(make_guard):
-    assert make_guard().call_tool('run_sql', query = 'SELECT 1') == 'ran: SELECT 1'
+    assert make_guard().call_tool('run_sql', query='SELECT 1') == 'ran: SELECT 1'
 
 
 def test_call_tool_raises_when_blocked(make_guard):
     g = make_guard(Mode.BLOCK)
     with pytest.raises(PolicyViolation) as exc:
-        g.call_tool('run_sql', query = 'DROP TABLE t')
+        g.call_tool('run_sql', query='DROP TABLE t')
     assert 'DROP' in str(exc.value)
     assert g.traj.events[-1].blocked
 
 
 def test_call_tool_executes_in_log_only(make_guard):
     g = make_guard(Mode.LOG_ONLY)
-    assert g.call_tool('run_sql', query = 'DROP TABLE t') == 'ran: DROP TABLE t'
+    assert g.call_tool('run_sql', query='DROP TABLE t') == 'ran: DROP TABLE t'
     assert g.traj.events[-1].violations
 
 
@@ -407,8 +459,8 @@ def test_guarded_decorator_blocks_and_passes(make_guard):
     def run_sql(query):
         return f'real: {query}'
 
-    assert run_sql(query = 'SELECT 1') == 'real: SELECT 1'
-    out = run_sql(query = 'DROP TABLE t')
+    assert run_sql(query='SELECT 1') == 'real: SELECT 1'
+    out = run_sql(query='DROP TABLE t')
     assert out.startswith('[BLOCKED by Agent-Execution-Guard:')
 
 
@@ -417,11 +469,11 @@ def test_guarded_decorator_uses_function_name_and_keeps_metadata(make_guard):
 
     @g.guarded()
     def read_file(path):
-        '''doc'''
+        """doc"""
         return path
 
     assert read_file.__name__ == 'read_file' and read_file.__doc__ == 'doc'
-    assert read_file(path = '/data/a.txt') == '/data/a.txt'
+    assert read_file(path='/data/a.txt') == '/data/a.txt'
     assert g.traj.events[-1].tool == 'read_file'
 
 
@@ -432,7 +484,7 @@ def test_guarded_decorator_log_only_still_executes(make_guard):
     def run_sql(query):
         return 'executed'
 
-    assert run_sql(query = 'DROP TABLE t') == 'executed'
+    assert run_sql(query='DROP TABLE t') == 'executed'
 
 
 def test_guarded_checks_positional_args(make_guard):
@@ -445,14 +497,16 @@ def test_guarded_checks_positional_args(make_guard):
     assert run_sql('DROP TABLE t').startswith('[BLOCKED')
     assert run_sql('SELECT 1') == 'executed'
 
+
 def test_guarded_checks_default_args(make_guard):
     g = make_guard(Mode.BLOCK)
 
     @g.guarded('run_sql')
-    def run_sql(query = 'DROP TABLE t'):
+    def run_sql(query='DROP TABLE t'):
         return 'executed'
 
     assert run_sql().startswith('[BLOCKED')
+
 
 def test_guarded_flattens_kwargs(make_guard):
     g = make_guard(Mode.BLOCK)
@@ -461,7 +515,7 @@ def test_guarded_flattens_kwargs(make_guard):
     def run_sql(**kw):
         return 'executed'
 
-    assert run_sql(query = 'DROP TABLE t').startswith('[BLOCKED')
+    assert run_sql(query='DROP TABLE t').startswith('[BLOCKED')
 
 
 def test_guarded_on_block_message_is_default(make_guard):
@@ -469,7 +523,7 @@ def test_guarded_on_block_message_is_default(make_guard):
 
     @g.guarded('run_sql')
     def run_sql(query):
-         return 'executed'
+        return 'executed'
 
     out = run_sql('DROP TABLE t')
     assert isinstance(out, str)
@@ -480,7 +534,7 @@ def test_guarded_on_block_message_is_default(make_guard):
 def test_guarded_on_block_raise(make_guard):
     g = make_guard(Mode.BLOCK)
 
-    @g.guarded('run_sql', on_block = 'raise')
+    @g.guarded('run_sql', on_block='raise')
     def run_sql(query):
         return 'executed'
 
@@ -492,8 +546,9 @@ def test_guarded_on_block_raise(make_guard):
 
 # compute_metrics
 
+
 def _mal(final_unsafe=False, events=()):
-    t = Trajectory(name = 'm', is_malicious_task = True, final_unsafe = final_unsafe)
+    t = Trajectory(name='m', is_malicious_task=True, final_unsafe=final_unsafe)
     t.events = list(events)
     return t
 
@@ -512,8 +567,8 @@ def test_metrics_final_asr():
 
 
 def test_metrics_icr_counts_executed_with_clean_final():
-    executed = StepEvent(0, 'tool_call', violations = ['x'])
-    blocked = StepEvent(0, 'tool_call', violations = ['x'], blocked = True)
+    executed = StepEvent(0, 'tool_call', violations=['x'])
+    blocked = StepEvent(0, 'tool_call', violations=['x'], blocked=True)
     trajs = [
         _mal(False, [executed]),
         _mal(True, [executed]),
@@ -526,30 +581,36 @@ def test_metrics_icr_counts_executed_with_clean_final():
 
 
 def test_metrics_unsafe_planning_rate():
-    trajs = [_mal(False, [
-        StepEvent(0, 'plan', violations=['x']),
-        StepEvent(1, 'plan'),
-        StepEvent(2, 'plan'),
-        StepEvent(3, 'plan', violations=['y']),
-    ])]
+    trajs = [
+        _mal(
+            False,
+            [
+                StepEvent(0, 'plan', violations=['x']),
+                StepEvent(1, 'plan'),
+                StepEvent(2, 'plan'),
+                StepEvent(3, 'plan', violations=['y']),
+            ],
+        )
+    ]
     assert compute_metrics(trajs)['Unsafe Planning Rate'] == 0.5
 
 
 def test_metrics_benign_false_positive_and_utility():
-    b1 = Trajectory(name = 'b1', events = [StepEvent(0, 'tool_call', violations = ['x'], blocked = True)])
-    b2 = Trajectory(name = 'b2', events = [StepEvent(0, 'tool_call')])
+    b1 = Trajectory(name='b1', events=[StepEvent(0, 'tool_call', violations=['x'], blocked=True)])
+    b2 = Trajectory(name='b2', events=[StepEvent(0, 'tool_call')])
     m = compute_metrics([b1, b2])
     assert m['False positive rate (benign)'] == 0.5
     assert m['Utility (benign not blocked)'] == 0.5
 
 
 def test_metrics_benign_do_not_affect_attack_metrics():
-    b = Trajectory(name = 'b', final_unsafe = True)
+    b = Trajectory(name='b', final_unsafe=True)
     m = compute_metrics([b, _mal(False)])
     assert m['Final ASR'] == 0
 
 
 # print_report
+
 
 def test_print_report_output(capsys):
     print_report('Title', {'Final ASR': 0.333, 'Other': 1.0})
@@ -559,6 +620,7 @@ def test_print_report_output(capsys):
 
 
 # run_scenarios (integration)
+
 
 def test_run_scenarios_baseline_vs_protected():
     base = compute_metrics(run_scenarios(Mode.LOG_ONLY))

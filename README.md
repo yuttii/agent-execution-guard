@@ -36,21 +36,22 @@ policy = {
     'tools': {
         'read_file': {'deny_regex': {'path': r'\.env|id_rsa|/etc/passwd'}},
         'http_post': {'allow_domains': {'url': ['api.internal.example.com']}},
-        'run_sql':   {'sql_ops': {'query': ['SELECT']}},
+        'run_sql': {'sql_ops': {'query': ['SELECT']}},
         'read_file': {'allow_paths': {'path': ['/data']}, 'deny_regex': {'path': r'\.env|id_rsa'}},
     },
 }
 
 guard = ExecutionGuard(ToolPolicyInspector(policy), PlanAnalyzer(), Mode.BLOCK)
-guard.start('my-run', is_malicious_task = False)
+guard.start('my-run', is_malicious_task=False)
+
 
 @guard.guarded('run_sql')
-def run_sql(query: str):
-    ...
+def run_sql(query: str): ...
+
 
 guard.before_plan("I'll read the table and compute the total.")
-run_sql(query = 'SELECT COUNT(*) FROM users')   # allowed
-run_sql(query = 'DROP TABLE user')             # returns a [BLOCKED ...] message
+run_sql(query='SELECT COUNT(*) FROM users')  # allowed
+run_sql(query='DROP TABLE user')  # returns a [BLOCKED ...] message
 ```
 
 `call_tool` always raises `PolicyViolation` when blocked; `@guard.guarded` returns a `[BLOCKED ...]` message by default, or raises with `on_block='raise'`.
@@ -82,6 +83,7 @@ python -m pytest -v
 - There is a gap between the path check and the actual file read (TOCTOU): a symlink could be swapped in between. For stronger guarantees, pass the already-resolved path to the tool.
 - URL checks validate the string only, not the final IP after DNS resolution or redirects, so DNS rebinding and open redirects are not covered.
 - Regex rules on code (`deny_regex` for tools like `execute_code`) are not a security boundary and are trivially bypassed. Run untrusted code only in a sandbox (a container with no network and a restricted filesystem), or deny the tool entirely. In the demo policy `execute_code` is denied by default.
+- The current trajectory is stored per execution context (`contextvars`). Call `guard.start()` in each thread or asyncio task. If tools are run in a separate thread pool (for example via `ThreadPoolExecutor.submit` or `loop.run_in_executor`), the context is not copied automatically: use `asyncio.to_thread` or `contextvars.copy_context().run(...)`.
 
 ## Roadmap
 
