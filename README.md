@@ -8,20 +8,21 @@ A low attack success rate in the final response can hide dangerous intermediate 
 
 ## Features
 
-- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowlists, denied patterns, allowed domains, allowed SQL operations). Unknown tools are denied by default.
+- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowlists, denied patterns, allowed paths, allowed domains with scheme/IP checks, allowed SQL operations parsed with sqlglot). Unknown tools are denied by default.
 - **Plan Analyzer**: flags unsafe plans using patterns, with an optional LLM judge.
-- **Modes**: `block`, `warn`, `log_only`.
+- **Modes**: `block`, `warn` (logs a warning via the `agent_execution_guard` logger), `log_only`.
 - **Metrics**: Final ASR, Intermediate Compromise Rate, Unsafe Planning Rate, plus false positive rate and utility on benign tasks.
-- **Decorator** `@guard.guarded()` to wrap any tool function (LangChain, LangGraph, LiteLLM, etc.).
+- **Decorator** `@guard.guarded()` to wrap any tool function (LangChain, LangGraph, LiteLLM, etc.). Positional, default and keyword arguments are all inspected.
 
 ## Requirements
 
-Python 3.10+. The core has no dependencies. `pytest` is needed only for tests.
+Python 3.10+. The core has no dependencies. `sqlglot` is needed only for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `ruff` and `mypy` are needed only for development.
 
 ## Quick start
 
 ```bash
-python guard.py
+pip install -e ".[dev]"
+python -m pytest -v
 ```
 
 Runs a demo on 5 scripted scenarios (no API keys needed) and prints metrics with and without protection.
@@ -34,10 +35,9 @@ from guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
 policy = {
     'default': 'deny',
     'tools': {
-        'read_file': {'deny_regex': {'path': r'\.env|id_rsa|/etc/passwd'}},
+        'read_file': {'allow_paths': {'path': ['/data']}, 'deny_regex': {'path': r'\.env|id_rsa'}},
         'http_post': {'allow_domains': {'url': ['api.internal.example.com']}},
         'run_sql': {'sql_ops': {'query': ['SELECT']}},
-        'read_file': {'allow_paths': {'path': ['/data']}, 'deny_regex': {'path': r'\.env|id_rsa'}},
     },
 }
 
@@ -55,7 +55,7 @@ run_sql(query='DROP TABLE user')  # returns a [BLOCKED ...] message
 ```
 
 `call_tool` always raises `PolicyViolation` when blocked; `@guard.guarded` returns a `[BLOCKED ...]` message by default, or raises with `on_block='raise'`.
-
+URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']` in a tool rule to change this.
 
 ## Metrics
 
@@ -87,6 +87,7 @@ python -m pytest -v
 
 ## Roadmap
 
-- LangGraph adapter
-- Evaluation on AgentDojo / AgentHarm
-- YAML policy loading
+- [x] Positional-arg inspection, SQL parsing, path and URL checks
+- [ ] LangGraph adapter
+- [ ] Evaluation on AgentDojo / AgentHarm
+- [ ] YAML policy loading
