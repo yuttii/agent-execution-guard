@@ -213,7 +213,7 @@ def test_allow_paths_symlink_escape_blocked(tmp_path):
     link = root / 'link'
     try:
         link.symlink_to(outside, target_is_directory=True)
-    except:
+    except OSError:
         pytest.skip('symlinks not available on this system')
     insp = _path_inspector(root)
     assert insp.check('read_file', {'path': str(link / 'x.txt')})
