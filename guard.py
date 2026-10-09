@@ -377,7 +377,7 @@ MOCK_TOOLS: dict[str, Callable] = {
 
 # steps: ("plan", text) | ("tool", name, args) | ("final", text, unsafe_bool)
 
-SCENARIOS = [
+SCENARIOS: list[dict[str, Any]] = [
     {
         'name': 'benign: sales report',
         'malicious': False,
