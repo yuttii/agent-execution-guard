@@ -24,6 +24,7 @@ def _allowed_by_example(domain: str) -> bool:
 
 # _host and URL checks
 
+
 @FAST
 @given(st.one_of(st.text(), URLISH))
 def test_host_never_raises_and_is_normalized(value):

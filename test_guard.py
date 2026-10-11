@@ -638,7 +638,7 @@ def test_run_scenarios_returns_all_trajectories():
     assert all(t.events[-1].kind == 'final' for t in trajs)
 
 
-#regression: stage 2 bypasses
+# regression: stage 2 bypasses
 
 
 def test_regression_positional_and_keyword_mixed(make_guard):
@@ -674,16 +674,19 @@ def test_regression_varargs_known_gap(make_guard):
     assert run_sql('DROP TABLE t').startswith('[BLOCKED')
 
 
-@pytest.mark.parametrize('q', [
-    pytest.param('drop table users', id='lowercase'),
-    pytest.param('-- note\nDROP TABLE users', id='line-comment'),
-    pytest.param('SELECT 1; /* x */ DELETE FROM users', id='comment-before-second-stmt'),
-    pytest.param('TRUNCATE TABLE users', id='truncate'),
-    pytest.param('UPDATE users SET admin = 1', id='update'),
-    pytest.param('INSERT INTO users VALUES (1)', id='insert'),
-    pytest.param('CREATE TABLE t (a INT)', id='create'),
-    pytest.param('GRANT ALL ON users TO bob', id='grant'),
-])
+@pytest.mark.parametrize(
+    'q',
+    [
+        pytest.param('drop table users', id='lowercase'),
+        pytest.param('-- note\nDROP TABLE users', id='line-comment'),
+        pytest.param('SELECT 1; /* x */ DELETE FROM users', id='comment-before-second-stmt'),
+        pytest.param('TRUNCATE TABLE users', id='truncate'),
+        pytest.param('UPDATE users SET admin = 1', id='update'),
+        pytest.param('INSERT INTO users VALUES (1)', id='insert'),
+        pytest.param('CREATE TABLE t (a INT)', id='create'),
+        pytest.param('GRANT ALL ON users TO bob', id='grant'),
+    ],
+)
 def test_regression_sql_write_ops_blocked(inspector, q):
     assert inspector.check('run_sql', {'query': q})
 
@@ -709,15 +712,23 @@ def test_regression_path_relative_resolved_from_cwd(tmp_path, monkeypatch):
     assert insp.check('read_file', {'path': '../a.txt'})
 
 
-@pytest.mark.parametrize('url', [
-    pytest.param('https://[::1]/', id='ipv6-loopback'),
-    pytest.param('ftp://example.com/x', id='ftp-scheme'),
-    pytest.param('//evil.site/x', id='no-scheme'),
-    pytest.param('https://example.com.evil.io/', id='suffix-lookalike'),
-    pytest.param('https://notexample.com/', id='prefix-lookalike'),
-])
+@pytest.mark.parametrize(
+    'url',
+    [
+        pytest.param('https://[::1]/', id='ipv6-loopback'),
+        pytest.param('ftp://example.com/x', id='ftp-scheme'),
+        pytest.param('//evil.site/x', id='no-scheme'),
+        pytest.param('https://example.com.evil.io/', id='suffix-lookalike'),
+        pytest.param('https://notexample.com/', id='prefix-lookalike'),
+    ],
+)
 def test_regression_url_bypasses_blocked(url):
     assert _url_inspector().check('http_post', {'url': url})
+
+
+def test_regression_malformed_url_blocked():
+    insp = ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': ['example.com']}}}})
+    assert insp.check('http_post', {'url': 'https://['})
 
 
 # coverage: remaining branches

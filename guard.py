@@ -96,16 +96,19 @@ class ToolPolicyInspector:
 
     @staticmethod
     def _host(value: str) -> str:
-        if '@' in value and '://' not in value:  # email
-            return value.rsplit('@', 1)[1].lower().rstrip('.')
-        parsed = urlparse(value)
-        if parsed.hostname:
-            return parsed.hostname.lower().rstrip('.')
-        return ''
+        try:
+            if '@' in value and '://' not in value:  # email
+                return value.rsplit('@', 1)[1].lower().rstrip('.')
+            return (urlparse(value).hostname or '').lower().rstrip('.')
+        except ValueError:
+            return ''
 
     @staticmethod
     def _url_problems(value: str, schemes: list[str]) -> list[str]:
-        u = urlparse(value)
+        try:
+            u = urlparse(value)
+        except ValueError:
+            return ['URL cannot be parsed']
         host = (u.hostname or '').lower().rstrip('.')
         probs: list[str] = []
         if u.scheme not in schemes:
@@ -140,7 +143,7 @@ class ToolPolicyInspector:
         allowed = {o.upper() for o in ops}
         try:
             stmts = [s for s in sqlglot.parse(query) if s is not None]
-        except sqlglot.errors.SqlglotError:
+        except Exception:
             return [f'{tool}.{arg} SQL cannot be parsed']
 
         query_types = (exp.Select, exp.Union, exp.Except, exp.Intersect)
