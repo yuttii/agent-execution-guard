@@ -12,7 +12,7 @@ dependencies = []
 
 [project.optional-dependencies]
 sql = ['sqlglot']
-dev = ['pytest', 'pytest-cov','ruff', 'mypy', 'sqlglot']
+dev = ['pytest', 'pytest-cov', 'hypothesis','ruff', 'mypy', 'sqlglot']
 
 [tool.setuptools]
 py-modules = ['guard']
