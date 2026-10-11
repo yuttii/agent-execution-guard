@@ -727,7 +727,9 @@ def test_regression_url_bypasses_blocked(url):
 
 
 def test_regression_malformed_url_blocked():
-    insp = ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': ['example.com']}}}})
+    insp = ToolPolicyInspector(
+        {'tools': {'http_post': {'allow_domains': {'url': ['example.com']}}}}
+    )
     assert insp.check('http_post', {'url': 'https://['})
 
 

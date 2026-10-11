@@ -143,7 +143,7 @@ class ToolPolicyInspector:
         allowed = {o.upper() for o in ops}
         try:
             stmts = [s for s in sqlglot.parse(query) if s is not None]
-        except Exception:
+        except Exception:  # noqa: BLE001  (any parser failure must block the query: fail closed)
             return [f'{tool}.{arg} SQL cannot be parsed']
 
         query_types = (exp.Select, exp.Union, exp.Except, exp.Intersect)
