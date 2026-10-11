@@ -70,8 +70,9 @@ URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']
 ## Tests
 
 ```bash
-pip install pytest
+pip install -e ".[dev]"
 python -m pytest -v
+python -m pytest --cov=guard --cov-report=term-missing
 ```
 
 ## Limitations
