@@ -718,3 +718,38 @@ def test_regression_path_relative_resolved_from_cwd(tmp_path, monkeypatch):
 ])
 def test_regression_url_bypasses_blocked(url):
     assert _url_inspector().check('http_post', {'url': url})
+
+
+# coverage: remaining branches
+
+
+def test_as_list_none_and_scalars():
+    as_list = ToolPolicyInspector._as_list
+    assert as_list(None) == []
+    assert as_list('a.com') == ['a.com']
+    assert as_list(5) == [5]
+    assert as_list(['a', 'b']) == ['a', 'b']
+    assert as_list(('a',)) == ['a']
+
+
+def test_as_list_generic_alias_flattens_nested_lists():
+    class FakeAlias:
+        __origin__ = list
+        __args__ = (['a', 'b'], 'c')
+
+    assert ToolPolicyInspector._as_list(FakeAlias()) == ['a', 'b', 'c']
+
+
+def test_url_problems_without_host():
+    assert ToolPolicyInspector._url_problems('https:///path', ['https']) == []
+    assert ToolPolicyInspector._url_problems('file:///etc/passwd', ['https']) == [
+        'scheme "file" not allowed'
+    ]
+
+
+def test_path_allowed_handles_oserror(monkeypatch, tmp_path):
+    def boom(self, *args, **kwargs):
+        raise OSError('boom')
+
+    monkeypatch.setattr(Path, 'resolve', boom)
+    assert ToolPolicyInspector._path_allowed(str(tmp_path), [str(tmp_path)]) is False
