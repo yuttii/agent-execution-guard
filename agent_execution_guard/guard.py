@@ -33,12 +33,32 @@ class ExecutionGuard:
         analyzer: PlanAnalyzer | None = None,
         mode: Mode = Mode.BLOCK,
         tools: dict[str, Callable] | None = None,
+        *,
+        sink: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.inspector = inspector
         self.analyzer = analyzer or PlanAnalyzer()
         self.mode = mode
         self.tools = tools or {}
-        self._traj_var: ContextVar[Trajectory | None] = ContextVar('traj', default=None)
+        self._traj_var: ContextVar[Trajectory | None] = ContextVar('traj', default = None)
+        self.sink = sink
+
+    def _emit(self, ev: StepEvent, **extra: Any) -> None:
+        traj = self.traj
+        if self.sink is None or traj is None:
+            return
+        record = {
+            'run_id': traj.run_id, 'run': traj.name,
+            'malicious': traj.is_malicious_task, **ev.to_dict(), **extra,
+        }
+        try:
+            self.sink(record)
+        except Exception:   # noqa: BLE001  (a broken log must never break the agent)
+            logger.exception('event sink failed')
+
+    def _finish(self, ev: StepEvent) -> None:
+        self._report(ev)
+        self._emit(ev)
 
     @property
     def traj(self) -> Trajectory | None:
@@ -70,7 +90,7 @@ class ExecutionGuard:
     def before_plan(self, text: str) -> StepEvent:
         ev = self._add(kind='plan', content=text)
         ev.violations = self.analyzer.check(text)
-        self._report(ev)
+        self._finish(ev)
         return ev
 
     def before_tool_call(self, tool: str, args: dict[str, Any]) -> StepEvent:
@@ -78,7 +98,7 @@ class ExecutionGuard:
         ev.violations = self.inspector.check(tool, args)
         if ev.violations and self.mode is Mode.BLOCK:
             ev.blocked = True
-        self._report(ev)
+        self._finish(ev)
         return ev
 
     def call_tool(self, tool: str, **args) -> Any:
@@ -88,9 +108,9 @@ class ExecutionGuard:
         return self.tools[tool](**args)
 
     def after_final(self, text: str, unsafe: bool) -> StepEvent:
-        assert self.traj is not None
-        self.traj.final_unsafe = unsafe
-        return self._add(kind='final', content=text)
+        ev = self._add(kind = 'final', content = text)
+        self._emit(ev, final_unsafe = unsafe)
+        return ev
 
     def guarded(self, name: str | Callable | None = None, *, on_block: str = 'message'):
         def make(fn: Callable, tool_name: str) -> Callable:

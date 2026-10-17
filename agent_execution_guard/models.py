@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec = 'milliseconds')
 
 
 class Mode(str, Enum):
@@ -23,9 +29,17 @@ class StepEvent:
     kind: str
     content: str = ''
     tool: str | None = None
-    args: dict[str, Any] = field(default_factory=dict)
-    violations: list[str] = field(default_factory=list)
+    args: dict[str, Any] = field(default_factory = dict)
+    violations: list[str] = field(default_factory = list)
     blocked: bool = False
+    ts: str = field(default_factory = _now)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'idx': self.idx, 'kind': self.kind, 'content': self.content,
+            'tool': self.tool, 'args': self.args, 'violations': self.violations,
+            'blocked': self.blocked, 'ts': self.ts,
+        }
 
 
 @dataclass
@@ -34,6 +48,7 @@ class Trajectory:
     events: list[StepEvent] = field(default_factory=list)
     final_unsafe: bool = False
     is_malicious_task: bool = False
+    run_id: str = field(default_factory = lambda: uuid.uuid4().hex)
 
     @property
     def plan_events(self):
@@ -50,3 +65,11 @@ class Trajectory:
     @property
     def has_block(self) -> bool:
         return any(e.blocked for e in self.events)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            'run_id': self.run_id, 'name': self.name,
+            'is_malicious_task': self.is_malicious_task,
+            'final_unsafe': self.final_unsafe,
+            'events': [e.to_dict() for e in self.events],
+        }
