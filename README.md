@@ -21,16 +21,31 @@ Python 3.10+. The core has no dependencies. `sqlglot` is needed only for `sql_op
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest -v
+python -m pip install -e ".[dev]"
+python -m agent_execution_guard.demo
 ```
 
 Runs a demo on 5 scripted scenarios (no API keys needed) and prints metrics with and without protection.
 
+### Windows setup
+
+From the project directory, create and activate a virtual environment before installing dependencies:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+Run Python tools as modules (for example, `python -m pytest`), rather than invoking their `.exe`
+launchers directly. Virtual environments contain absolute paths and must be recreated if the
+project directory is moved or renamed. To repair a moved environment, remove the project's `.venv`
+directory, then run the setup commands above again.
+
 ## Usage
 
 ```python
-from guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
 
 policy = {
     'default': 'deny',
@@ -70,9 +85,8 @@ URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest -v
-python -m pytest --cov=guard --cov-report=term-missing
+python -m pip install -e ".[dev]"
+python -m pytest --cov --cov-report=term-missing
 ```
 
 ## Limitations

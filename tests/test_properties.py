@@ -1,9 +1,10 @@
 import pytest
+from agent_execution_guard.demo import DEMO_POLICY
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from hypothesis.provisional import domains
 
-from guard import DEMO_POLICY, ToolPolicyInspector
+from agent_execution_guard import ToolPolicyInspector
 
 pytest.importorskip('sqlglot')
 

@@ -1,14 +1,11 @@
 import asyncio
-import sys
 import threading
 from pathlib import Path
 
 import pytest
+from agent_execution_guard.demo import DEMO_POLICY, run_scenarios
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from guard import (
-    DEMO_POLICY,
+from agent_execution_guard import (
     ExecutionGuard,
     Mode,
     PlanAnalyzer,
@@ -18,7 +15,6 @@ from guard import (
     Trajectory,
     compute_metrics,
     print_report,
-    run_scenarios,
 )
 
 # fixtures
@@ -766,3 +762,11 @@ def test_path_allowed_handles_oserror(monkeypatch, tmp_path):
 
     monkeypatch.setattr(Path, 'resolve', boom)
     assert ToolPolicyInspector._path_allowed(str(tmp_path), [str(tmp_path)]) is False
+
+
+def test_demo_main_runs(capsys):
+    from agent_execution_guard.demo import main
+
+    main()
+    out = capsys.readouterr().out
+    assert 'WITH protection' in out

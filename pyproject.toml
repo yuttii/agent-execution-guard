@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'agent-execution-guard'
-version = '0.2.0'
+version = '0.3.0'
 description = 'Middleware that intercepts intermediate steps of an LLM agent'
 readme = 'README.md'
 requires-python = '>=3.10'
@@ -14,11 +14,14 @@ dependencies = []
 sql = ['sqlglot']
 dev = ['pytest', 'pytest-cov', 'hypothesis','ruff', 'mypy', 'sqlglot']
 
-[tool.setuptools]
-py-modules = ['guard']
+[tool.setuptools.packages.find]
+include = ['agent_execution_guard*']
+
+[tool.setuptools.package-data]
+agent_execution_guard = ['py.typed']
 
 [tool.pytest.ini_options]
-testpaths = ['.']
+testpaths = ['tests']
 
 [tool.ruff]
 line-length = 100
@@ -31,6 +34,7 @@ python_version = '3.10'
 
 [tool.coverage.run]
 branch = true
+source = ['agent_execution_guard']
 
 [tool.coverage.report]
 fail_under = 90
