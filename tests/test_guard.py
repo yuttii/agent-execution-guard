@@ -3,7 +3,6 @@ import threading
 from pathlib import Path
 
 import pytest
-from agent_execution_guard.demo import DEMO_POLICY, run_scenarios
 
 from agent_execution_guard import (
     ExecutionGuard,
@@ -16,6 +15,7 @@ from agent_execution_guard import (
     compute_metrics,
     print_report,
 )
+from agent_execution_guard.demo import DEMO_POLICY, run_scenarios
 
 # fixtures
 
