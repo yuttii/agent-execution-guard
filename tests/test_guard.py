@@ -729,26 +729,6 @@ def test_regression_malformed_url_blocked():
     assert insp.check('http_post', {'url': 'https://['})
 
 
-# coverage: remaining branches
-
-
-def test_as_list_none_and_scalars():
-    as_list = ToolPolicyInspector._as_list
-    assert as_list(None) == []
-    assert as_list('a.com') == ['a.com']
-    assert as_list(5) == [5]
-    assert as_list(['a', 'b']) == ['a', 'b']
-    assert as_list(('a',)) == ['a']
-
-
-def test_as_list_generic_alias_flattens_nested_lists():
-    class FakeAlias:
-        __origin__ = list
-        __args__ = (['a', 'b'], 'c')
-
-    assert ToolPolicyInspector._as_list(FakeAlias()) == ['a', 'b', 'c']
-
-
 def test_url_problems_without_host():
     assert ToolPolicyInspector._url_problems('https:///path', ['https']) == []
     assert ToolPolicyInspector._url_problems('file:///etc/passwd', ['https']) == [

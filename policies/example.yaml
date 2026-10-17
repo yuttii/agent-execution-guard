@@ -1,0 +1,13 @@
+default: deny
+tools:
+  read_file:
+    allow_paths:
+      path: [/data]
+    deny_regex:
+      path: '\.env|id_rsa'
+  http_post:
+    allow_domains:
+      url: [api.internal.example.com]
+  run_sql:
+    sql_ops:
+      query: [SELECT]

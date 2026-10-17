@@ -16,7 +16,7 @@ A low attack success rate in the final response can hide dangerous intermediate 
 
 ## Requirements
 
-Python 3.10+. The core has no dependencies. `sqlglot` is needed only for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `ruff` and `mypy` are needed only for development.
+Python 3.10+. Required: `pydantic` (policy validation). Optional: `pyyaml` for YAML policies (`pip install -e ".[yaml]"`), `sqlglot` for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `pytest-cov`, `hypothesis`, `ruff` and `mypy` are needed only for development (`pip install -e ".[dev]"`).
 
 ## Quick start
 
@@ -71,6 +71,36 @@ run_sql(query='DROP TABLE user')  # returns a [BLOCKED ...] message
 
 `call_tool` always raises `PolicyViolation` when blocked; `@guard.guarded` returns a `[BLOCKED ...]` message by default, or raises with `on_block='raise'`.
 URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']` in a tool rule to change this.
+
+## YAML policies
+
+Policies can be stored in a YAML file and are validated at load time: a typo in a key (for example `allow_domain` instead of `allow_domains`), an invalid regex or a missing `sqlglot` raises an error at startup instead of silently disabling a rule.
+
+```yaml
+# policies/example.yaml
+default: deny
+tools:
+  read_file:
+    allow_paths:
+      path: [/data]
+    deny_regex:
+      path: '\.env|id_rsa'
+  http_post:
+    allow_domains:
+      url: [api.internal.example.com]
+  run_sql:
+    sql_ops:
+      query: [SELECT]
+```
+
+```python
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector
+from agent_execution_guard.schema import load_policy
+
+guard = ExecutionGuard(ToolPolicyInspector(load_policy('policies/example.yaml')))
+```
+
+Requires `pip install -e ".[yaml]"`.
 
 ## Metrics
 

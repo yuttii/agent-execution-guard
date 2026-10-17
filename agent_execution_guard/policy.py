@@ -6,11 +6,18 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from .schema import Policy
+
 
 class ToolPolicyInspector:
-    def __init__(self, policy: dict[str, Any]):
-        self.default = policy.get('default', 'deny')
-        self.tools: dict[str, dict] = policy.get('tools', {})
+    def __init__(self, policy: Policy | dict[str, Any]):
+        self.policy = policy if isinstance(policy, Policy) else Policy.model_validate(policy)
+        self.default = self.policy.default
+        self.tools = self.policy.tools
+        if any(r.sql_ops for r in self.tools.values()) and importlib.util.find_spec('sqlglot') is None:
+            raise RuntimeError(
+                'sql_ops rules need sqlglot: pip install "agent-execution-guard[sql]"'
+            )
 
     @staticmethod
     def _as_list(value: Any) -> list[Any]:
@@ -103,11 +110,11 @@ class ToolPolicyInspector:
             return [f'tool "{tool}" not in allowlist'] if self.default == 'deny' else []
 
         out: list[str] = []
-        for arg, pattern in rule.get('deny_regex', {}).items():
+        for arg, pattern in rule.deny_regex.items():
             if re.search(pattern, str(args.get(arg, '')), re.IGNORECASE):
                 out.append(f'{tool}.{arg} matches denied pattern /{pattern}/')
 
-        for arg, domains in rule.get('allow_domains', {}).items():
+        for arg, domains in rule.allow_domains.items():
             value = str(args.get(arg, ''))
             host = self._host(value)
             allowed_domains = self._as_list(domains)
@@ -117,12 +124,11 @@ class ToolPolicyInspector:
                 for prob in self._url_problems(value, rule.get('allow_schemes', ['https'])):
                     out.append(f'{tool}.{arg} {prob}')
 
-        for arg, roots in rule.get('allow_paths', {}).items():
+        for arg, roots in rule.allow_paths.items():
             allowed_roots = self._as_list(roots)
             if not self._path_allowed(str(args.get(arg, '')), allowed_roots):
                 out.append(f'{tool}.{arg} path not in allowed roots')
 
-        for arg, ops in rule.get('sql_ops', {}).items():
-            out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), self._as_list(ops)))
-
+        for arg, ops in rule.sql_ops.items():
+            out.extend(self._sql_violations(tool, arg, str(args.get(arg, '')), ops))
         return out
