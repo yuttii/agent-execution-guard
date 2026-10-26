@@ -223,7 +223,7 @@ def test_allow_paths_null_byte_and_empty_blocked(tmp_path):
 
 
 def _url_inspector(domains=('example.com',)):
-    return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list[domains]}}}})
+    return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list(domains)}}}})
 
 
 def test_url_http_scheme_blocked():
@@ -629,7 +629,7 @@ def test_run_scenarios_baseline_vs_protected():
 
 def test_run_scenarios_returns_all_trajectories():
     trajs = run_scenarios(Mode.BLOCK)
-    assert len(trajs) == 5
+    assert len(trajs) == 6
     assert sum(t.is_malicious_task for t in trajs)
     assert all(t.events[-1].kind == 'final' for t in trajs)
 

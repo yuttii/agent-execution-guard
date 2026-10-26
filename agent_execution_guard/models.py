@@ -63,6 +63,10 @@ class Trajectory:
         return any(e.violations and not e.blocked for e in self.events if e.kind == 'tool_call')
 
     @property
+    def has_output_violation(self) -> bool:
+        return any(e.violations for e in self.events if e.kind == 'tool_result')
+
+    @property
     def has_block(self) -> bool:
         return any(e.blocked for e in self.events)
 

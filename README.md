@@ -131,10 +131,11 @@ python -m pytest --cov --cov-report=term-missing
 - The current trajectory is stored per execution context (`contextvars`). Call `guard.start()` in each thread or asyncio task. If tools are run in a separate thread pool (for example via `ThreadPoolExecutor.submit` or `loop.run_in_executor`), the context is not copied automatically: use `asyncio.to_thread` or `contextvars.copy_context().run(...)`.
 - Tool functions with `*args` cannot be matched to policy arguments; use named parameters.
 - JSONL logs contain tool arguments (truncated); treat logs/ as sensitive.
+- Output checks are pattern-based and can be bypassed by rephrasing or encoding; they are a safety net, not a boundary. Stronger defenses against indirect prompt injection are least privilege after untrusted data (restrict which tools may run once the context contains web or email content) and clear separation of data from instructions.
 
 ## Roadmap
 
 - [x] Positional-arg inspection, SQL parsing, path and URL checks
 - [ ] LangGraph adapter
 - [ ] Evaluation on AgentDojo / AgentHarm
-- [ ] YAML policy loading
+- [x] YAML policy loading

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import ipaddress
 import re
 from pathlib import Path
@@ -121,7 +122,7 @@ class ToolPolicyInspector:
             if not any(host == d or host.endswith('.' + d) for d in allowed_domains):
                 out.append(f'{tool}.{arg} host "{host}" not in allowed domains')
             if '://' in value:
-                for prob in self._url_problems(value, rule.get('allow_schemes', ['https'])):
+                for prob in self._url_problems(value, rule.allow_schemes):
                     out.append(f'{tool}.{arg} {prob}')
 
         for arg, roots in rule.allow_paths.items():

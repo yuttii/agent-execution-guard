@@ -10,6 +10,7 @@ from typing import Any
 from .models import Mode, PolicyViolation, StepEvent, Trajectory
 from .plan import PlanAnalyzer
 from .policy import ToolPolicyInspector
+from .output import OutputInspector
 
 logger = logging.getLogger('agent_execution_guard')
 
@@ -35,6 +36,7 @@ class ExecutionGuard:
         tools: dict[str, Callable] | None = None,
         *,
         sink: Callable[[dict[str, Any]], None] | None = None,
+        output_inspector: OutputInspector | None = None
     ):
         self.inspector = inspector
         self.analyzer = analyzer or PlanAnalyzer()
@@ -42,6 +44,7 @@ class ExecutionGuard:
         self.tools = tools or {}
         self._traj_var: ContextVar[Trajectory | None] = ContextVar('traj', default = None)
         self.sink = sink
+        self.output_inspector = output_inspector
 
     def _emit(self, ev: StepEvent, **extra: Any) -> None:
         traj = self.traj
@@ -101,14 +104,35 @@ class ExecutionGuard:
         self._finish(ev)
         return ev
 
+    def after_tool_call(self, tool: str, result: Any) -> Any:
+        insp = self.output_inspector
+        if insp is None:
+            return result
+        text = result if isinstance(result, str) else repr(result)
+        findings = insp.check(text)
+        ev = self._add(kind = 'tool_result', tool = tool)
+        ev.violations = findings
+        shown = text
+        if findings and self.mode is Mode.BLOCK:
+            ev.blocked = True
+            if insp.has_injection(text) or not isinstance(result, str):
+                result = f'[TOOL OUTPUT WITHHELD by Agent-Execution-Guard: {"; ".join(findings)}]'
+            else:
+                result = insp.redact(text)
+            shown = str(result)
+        ev.content = insp.redact(shown)[:500] if findings else ''
+        self._finish(ev)
+        return result
+
     def call_tool(self, tool: str, **args) -> Any:
         ev = self.before_tool_call(tool, args)
         if ev.blocked:
             raise PolicyViolation(ev.violations)
-        return self.tools[tool](**args)
+        return self.after_tool_call(tool, self.tools[tool](**args))
 
     def after_final(self, text: str, unsafe: bool) -> StepEvent:
         ev = self._add(kind = 'final', content = text)
+        self.traj.final_unsafe = unsafe
         self._emit(ev, final_unsafe = unsafe)
         return ev
 
@@ -123,7 +147,7 @@ class ExecutionGuard:
                     if on_block == 'raise':
                         raise PolicyViolation(ev.violations)
                     return f'[BLOCKED by Agent-Execution-Guard: {"; ".join(ev.violations)}]'
-                return fn(*a, **kw)
+                return self.after_tool_call(tool_name, fn(*a, **kw))
 
             return wrapper
 
