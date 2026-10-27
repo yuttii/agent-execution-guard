@@ -12,22 +12,22 @@ def _listify(value: Any) -> Any:
 
 
 class ToolRule(BaseModel):
-    model_config = ConfigDict(extra = 'forbid')
+    model_config = ConfigDict(extra='forbid')
 
-    deny_regex: dict[str, str] = Field(default_factory = dict)
-    allow_domains: dict[str, list[str]] = Field(default_factory = dict)
-    allow_paths: dict[str, list[str]] = Field(default_factory = dict)
-    sql_ops: dict[str, list[str]] = Field(default_factory = dict)
-    allow_schemes: list[str] = Field(default_factory = lambda: ['https'])
+    deny_regex: dict[str, str] = Field(default_factory=dict)
+    allow_domains: dict[str, list[str]] = Field(default_factory=dict)
+    allow_paths: dict[str, list[str]] = Field(default_factory=dict)
+    sql_ops: dict[str, list[str]] = Field(default_factory=dict)
+    allow_schemes: list[str] = Field(default_factory=lambda: ['https'])
 
-    @field_validator('allow_domains', 'allow_paths', 'sql_ops', mode = 'before')
+    @field_validator('allow_domains', 'allow_paths', 'sql_ops', mode='before')
     @classmethod
     def _wrap_scalars(cls, v: Any) -> Any:
         if isinstance(v, dict):
             return {k: _listify(x) for k, x in v.items()}
         return v
 
-    @field_validator('allow_schemes', mode = 'before')
+    @field_validator('allow_schemes', mode='before')
     @classmethod
     def _wrap_scheme(cls, v: Any) -> Any:
         return _listify(v)
@@ -59,10 +59,10 @@ class ToolRule(BaseModel):
 
 
 class Policy(BaseModel):
-    model_config = ConfigDict(extra = 'forbid')
+    model_config = ConfigDict(extra='forbid')
 
     default: Literal['deny', 'allow'] = 'deny'
-    tools: dict[str, ToolRule] = Field(default_factory = dict)
+    tools: dict[str, ToolRule] = Field(default_factory=dict)
 
 
 def load_policy(path: str | Path) -> Policy:
@@ -72,5 +72,5 @@ def load_policy(path: str | Path) -> Policy:
         raise RuntimeError(
             'YAML policies need PyYAML: pip install "agent-execution-guard[yaml]"'
         ) from e
-    data = yaml.safe_load(Path(path).read_text(encoding = 'utf-8'))
+    data = yaml.safe_load(Path(path).read_text(encoding='utf-8'))
     return Policy.model_validate(data or {})

@@ -42,7 +42,7 @@ def test_inspector_accepts_policy_object():
 
 def test_sql_ops_without_sqlglot_fails_at_start(monkeypatch):
     monkeypatch.setattr('importlib.util.find_spec', lambda name: None)
-    with pytest.raises(RuntimeError, match = 'sqlglot'):
+    with pytest.raises(RuntimeError, match='sqlglot'):
         ToolPolicyInspector({'tools': {'run_sql': {'sql_ops': {'query': ['SELECT']}}}})
 
 
@@ -56,7 +56,7 @@ def test_example_yaml_is_valid_and_works():
 def test_load_policy_rejects_typo(tmp_path):
     pytest.importorskip('yaml')
     f = tmp_path / 'p.yaml'
-    f.write_text('tools:\n  t:\n    allow_domain: {url: [a.com]}\n', encoding = 'utf-8')
+    f.write_text('tools:\n  t:\n    allow_domain: {url: [a.com]}\n', encoding='utf-8')
     with pytest.raises(ValidationError):
         load_policy(f)
 
@@ -64,5 +64,5 @@ def test_load_policy_rejects_typo(tmp_path):
 def test_load_policy_empty_file_denies_all(tmp_path):
     pytest.importorskip('yaml')
     f = tmp_path / 'p.yaml'
-    f.write_text('', encoding = 'utf-8')
+    f.write_text('', encoding='utf-8')
     assert ToolPolicyInspector(load_policy(f)).check('anything', {})

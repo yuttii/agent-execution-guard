@@ -15,7 +15,10 @@ class ToolPolicyInspector:
         self.policy = policy if isinstance(policy, Policy) else Policy.model_validate(policy)
         self.default = self.policy.default
         self.tools = self.policy.tools
-        if any(r.sql_ops for r in self.tools.values()) and importlib.util.find_spec('sqlglot') is None:
+        if (
+            any(r.sql_ops for r in self.tools.values())
+            and importlib.util.find_spec('sqlglot') is None
+        ):
             raise RuntimeError(
                 'sql_ops rules need sqlglot: pip install "agent-execution-guard[sql]"'
             )

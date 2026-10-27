@@ -13,7 +13,7 @@ dependencies = ['pydantic>=2']
 [project.optional-dependencies]
 sql = ['sqlglot']
 yaml = ['pyyaml']
-dev = ['pytest', 'pytest-cov', 'hypothesis','ruff', 'mypy', 'sqlglot']
+dev = ['pytest', 'pytest-cov', 'hypothesis','ruff', 'mypy', 'sqlglot', 'pyyaml', 'types-PyYAML']
 
 [tool.setuptools.packages.find]
 include = ['agent_execution_guard*']

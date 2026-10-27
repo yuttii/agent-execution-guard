@@ -8,9 +8,9 @@ from contextvars import ContextVar
 from typing import Any
 
 from .models import Mode, PolicyViolation, StepEvent, Trajectory
+from .output import OutputInspector
 from .plan import PlanAnalyzer
 from .policy import ToolPolicyInspector
-from .output import OutputInspector
 
 logger = logging.getLogger('agent_execution_guard')
 
@@ -36,13 +36,13 @@ class ExecutionGuard:
         tools: dict[str, Callable] | None = None,
         *,
         sink: Callable[[dict[str, Any]], None] | None = None,
-        output_inspector: OutputInspector | None = None
+        output_inspector: OutputInspector | None = None,
     ):
         self.inspector = inspector
         self.analyzer = analyzer or PlanAnalyzer()
         self.mode = mode
         self.tools = tools or {}
-        self._traj_var: ContextVar[Trajectory | None] = ContextVar('traj', default = None)
+        self._traj_var: ContextVar[Trajectory | None] = ContextVar('traj', default=None)
         self.sink = sink
         self.output_inspector = output_inspector
 
@@ -51,12 +51,15 @@ class ExecutionGuard:
         if self.sink is None or traj is None:
             return
         record = {
-            'run_id': traj.run_id, 'run': traj.name,
-            'malicious': traj.is_malicious_task, **ev.to_dict(), **extra,
+            'run_id': traj.run_id,
+            'run': traj.name,
+            'malicious': traj.is_malicious_task,
+            **ev.to_dict(),
+            **extra,
         }
         try:
             self.sink(record)
-        except Exception:   # noqa: BLE001  (a broken log must never break the agent)
+        except Exception:
             logger.exception('event sink failed')
 
     def _finish(self, ev: StepEvent) -> None:
@@ -110,7 +113,7 @@ class ExecutionGuard:
             return result
         text = result if isinstance(result, str) else repr(result)
         findings = insp.check(text)
-        ev = self._add(kind = 'tool_result', tool = tool)
+        ev = self._add(kind='tool_result', tool=tool)
         ev.violations = findings
         shown = text
         if findings and self.mode is Mode.BLOCK:
@@ -131,9 +134,11 @@ class ExecutionGuard:
         return self.after_tool_call(tool, self.tools[tool](**args))
 
     def after_final(self, text: str, unsafe: bool) -> StepEvent:
-        ev = self._add(kind = 'final', content = text)
-        self.traj.final_unsafe = unsafe
-        self._emit(ev, final_unsafe = unsafe)
+        traj = self.traj
+        assert traj is not None, 'call start() first'
+        traj.final_unsafe = unsafe
+        ev = self._add(kind='final', content=text)
+        self._emit(ev, final_unsafe=unsafe)
         return ev
 
     def guarded(self, name: str | Callable | None = None, *, on_block: str = 'message'):

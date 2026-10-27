@@ -6,11 +6,12 @@ from agent_execution_guard.demo import DEMO_POLICY, run_scenarios
 from agent_execution_guard.sinks import JsonlSink, export_trajectories, load_jsonl
 
 
-def _guard(tmp_path, sink = None):
+def _guard(tmp_path, sink=None):
     path = tmp_path / 'logs' / 'run.jsonl'
-    g = ExecutionGuard(ToolPolicyInspector(DEMO_POLICY), PlanAnalyzer(), Mode.BLOCK,
-                       sink = sink or JsonlSink(path))
-    g.start('t', is_malicious_task = True)
+    g = ExecutionGuard(
+        ToolPolicyInspector(DEMO_POLICY), PlanAnalyzer(), Mode.BLOCK, sink=sink or JsonlSink(path)
+    )
+    g.start('t', is_malicious_task=True)
     return g, path
 
 
@@ -18,7 +19,7 @@ def test_events_written_in_order(tmp_path):
     g, path = _guard(tmp_path)
     g.before_plan('I will compute the total')
     g.before_tool_call('run_sql', {'query': 'DROP TABLE t'})
-    g.after_final('done', unsafe = False)
+    g.after_final('done', unsafe=False)
     rows = load_jsonl(path)
     assert [r['kind'] for r in rows] == ['plan', 'tool_call', 'final']
     assert rows[1]['blocked'] is True and rows[1]['violations']
@@ -42,7 +43,7 @@ def test_broken_sink_does_not_break_guard(tmp_path):
     def bad_sink(record):
         raise OSError('disk full')
 
-    g, _ = _guard(tmp_path, sink = bad_sink)
+    g, _ = _guard(tmp_path, sink=bad_sink)
     ev = g.before_plan('hello')
     assert ev.kind == 'plan'
 
@@ -51,12 +52,12 @@ def test_threads_write_valid_lines(tmp_path):
     sink = JsonlSink(tmp_path / 'm.jsonl')
 
     def work(n):
-        g = ExecutionGuard(ToolPolicyInspector(DEMO_POLICY), sink = sink)
+        g = ExecutionGuard(ToolPolicyInspector(DEMO_POLICY), sink=sink)
         g.start(f't{n}')
         for _ in range(20):
             g.before_plan('ok')
 
-    ts = [threading.Thread(target = work, args = (i,)) for i in range(5)]
+    ts = [threading.Thread(target=work, args=(i,)) for i in range(5)]
     for t in ts:
         t.start()
     for t in ts:

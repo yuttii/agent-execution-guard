@@ -22,20 +22,25 @@ DEFAULT_INJECTION_PATTERNS = [
 
 
 class OutputInspector:
-    def __init__(self, secret_patterns: dict[str, str] | None = None,
-                 injection_patterns: list[str] | None = None):
+    def __init__(
+        self,
+        secret_patterns: dict[str, str] | None = None,
+        injection_patterns: list[str] | None = None,
+    ):
         self.secrets = {
-            name: re.compile(p, re.I)
+            name: re.compile(p, re.IGNORECASE)
             for name, p in (secret_patterns or DEFAULT_SECRET_PATTERNS).items()
         }
         self.injections = [
-            re.compile(p, re.I | re.S)
+            re.compile(p, re.IGNORECASE | re.DOTALL)
             for p in (injection_patterns or DEFAULT_INJECTION_PATTERNS)
         ]
 
     def check(self, text: str) -> list[str]:
         out = [f'secret in tool output: {n}' for n, rx in self.secrets.items() if rx.search(text)]
-        out += [f'possible prompt injection /{rx.pattern}/' for rx in self.injections if rx.search(text)]
+        out += [
+            f'possible prompt injection /{rx.pattern}/' for rx in self.injections if rx.search(text)
+        ]
         return out
 
     def has_injection(self, text: str) -> bool:
