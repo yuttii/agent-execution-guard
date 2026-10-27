@@ -8,15 +8,18 @@ A low attack success rate in the final response can hide dangerous intermediate 
 
 ## Features
 
-- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowlists, denied patterns, allowed paths, allowed domains with scheme/IP checks, allowed SQL operations parsed with sqlglot). Unknown tools are denied by default.
+- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowed paths, denied patterns, allowed domains with scheme/IP checks, allowed SQL operations parsed with sqlglot). Unknown tools are denied by default.
+- **Validated policies**: policies are Pydantic models and can be loaded from YAML. Typos and invalid rules fail at startup.
 - **Plan Analyzer**: flags unsafe plans using patterns, with an optional LLM judge.
+- **Tool output inspection**: `after_tool_call` hook redacts secrets and withholds outputs that look like prompt injection.
 - **Modes**: `block`, `warn` (logs a warning via the `agent_execution_guard` logger), `log_only`.
-- **Metrics**: Final ASR, Intermediate Compromise Rate, Unsafe Planning Rate, plus false positive rate and utility on benign tasks.
+- **Structured log**: every step can be written to a JSONL file; trajectories can be exported.
+- **Metrics**: Final ASR, Intermediate Compromise Rate, Unsafe Planning Rate, Tainted Tool Output Rate, plus false positive rate and utility on benign tasks.
 - **Decorator** `@guard.guarded()` to wrap any tool function (LangChain, LangGraph, LiteLLM, etc.). Positional, default and keyword arguments are all inspected.
 
 ## Requirements
 
-Python 3.10+. Required: `pydantic` (policy validation). Optional: `pyyaml` for YAML policies (`pip install -e ".[yaml]"`), `sqlglot` for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `pytest-cov`, `hypothesis`, `ruff` and `mypy` are needed only for development (`pip install -e ".[dev]"`).
+Python 3.10+. Required: `pydantic`. Optional: `pyyaml` for YAML policies (`pip install -e ".[yaml]"`), `sqlglot` for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `pytest-cov`, `hypothesis`, `ruff` and `mypy` are needed only for development (`pip install -e ".[dev]"`).
 
 ## Quick start
 
@@ -25,7 +28,7 @@ python -m pip install -e ".[dev]"
 python -m agent_execution_guard.demo
 ```
 
-Runs a demo on 5 scripted scenarios (no API keys needed) and prints metrics with and without protection.
+Runs a demo on 6 scripted scenarios (no API keys needed) and prints metrics with and without protection.
 
 ### Windows setup
 
@@ -102,6 +105,37 @@ guard = ExecutionGuard(ToolPolicyInspector(load_policy('policies/example.yaml'))
 
 Requires `pip install -e ".[yaml]"`.
 
+## JSONL log
+
+Pass a sink to write every step as one JSON line:
+
+```python
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector
+from agent_execution_guard.sinks import JsonlSink, export_trajectories
+
+guard = ExecutionGuard(ToolPolicyInspector(policy), sink=JsonlSink('logs/run.jsonl'))
+...
+export_trajectories([guard.traj], 'logs/trajectories.jsonl')
+```
+
+Each record has `run_id`, timestamp, event kind, tool, arguments, violations and `blocked`. Long values are truncated. A failing sink never breaks the agent; the error goes to the `agent_execution_guard` logger.
+
+## Tool output inspection
+
+Arguments are not the only attack surface: web pages, emails and files returned by tools can carry instructions (indirect prompt injection) or secrets. Enable the output check:
+
+```python
+from agent_execution_guard.output import OutputInspector
+
+guard = ExecutionGuard(inspector, mode=Mode.BLOCK, output_inspector=OutputInspector())
+```
+
+In `block` mode secrets are replaced with `[REDACTED]` and outputs that look like injection are withheld; in `warn` and `log_only` modes the output is passed through and the finding is recorded as a `tool_result` event.
+
+## Policy errors fail early
+
+Unknown keys, invalid regexes, invalid `default` values and `sql_ops` rules without `sqlglot` installed raise an error when the inspector is created, not on the first tool call.
+
 ## Metrics
 
 | Metric | Meaning |
@@ -111,11 +145,13 @@ Requires `pip install -e ".[yaml]"`.
 | Unsafe Planning Rate | Share of planning steps flagged as unsafe |
 | False positive rate | Share of benign runs with any flagged step |
 | Utility | Share of benign runs with no blocked call |
+| Tainted Tool Output Rate | Share of attack runs where a tool output contained a secret or an injection |
 
 ## Tests
 
 ```bash
 python -m pip install -e ".[dev]"
+python -m pytest -v
 python -m pytest --cov --cov-report=term-missing
 ```
 
@@ -136,6 +172,8 @@ python -m pytest --cov --cov-report=term-missing
 ## Roadmap
 
 - [x] Positional-arg inspection, SQL parsing, path and URL checks
-- [ ] LangGraph adapter
+- [x] Package layout, validated policies, YAML loading
+- [x] JSONL log and trajectory export
+- [x] Tool output inspection
+- [ ] LangChain / LangGraph / MCP adapters
 - [ ] Evaluation on AgentDojo / AgentHarm
-- [x] YAML policy loading
