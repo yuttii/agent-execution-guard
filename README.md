@@ -8,29 +8,47 @@ A low attack success rate in the final response can hide dangerous intermediate 
 
 ## Features
 
-- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowlists, denied patterns, allowed paths, allowed domains with scheme/IP checks, allowed SQL operations parsed with sqlglot). Unknown tools are denied by default.
+- **Tool-Execution Policy Inspector**: checks arguments of every tool call before it runs (allowed paths, denied patterns, allowed domains with scheme/IP checks, allowed SQL operations parsed with sqlglot). Unknown tools are denied by default.
+- **Validated policies**: policies are Pydantic models and can be loaded from YAML. Typos and invalid rules fail at startup.
 - **Plan Analyzer**: flags unsafe plans using patterns, with an optional LLM judge.
+- **Tool output inspection**: `after_tool_call` hook redacts secrets and withholds outputs that look like prompt injection.
 - **Modes**: `block`, `warn` (logs a warning via the `agent_execution_guard` logger), `log_only`.
-- **Metrics**: Final ASR, Intermediate Compromise Rate, Unsafe Planning Rate, plus false positive rate and utility on benign tasks.
+- **Structured log**: every step can be written to a JSONL file; trajectories can be exported.
+- **Metrics**: Final ASR, Intermediate Compromise Rate, Unsafe Planning Rate, Tainted Tool Output Rate, plus false positive rate and utility on benign tasks.
 - **Decorator** `@guard.guarded()` to wrap any tool function (LangChain, LangGraph, LiteLLM, etc.). Positional, default and keyword arguments are all inspected.
 
 ## Requirements
 
-Python 3.10+. The core has no dependencies. `sqlglot` is needed only for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `ruff` and `mypy` are needed only for development.
+Python 3.10+. Required: `pydantic`. Optional: `pyyaml` for YAML policies (`pip install -e ".[yaml]"`), `sqlglot` for `sql_ops` rules (`pip install -e ".[sql]"`). `pytest`, `pytest-cov`, `hypothesis`, `ruff` and `mypy` are needed only for development (`pip install -e ".[dev]"`).
 
 ## Quick start
 
 ```bash
-pip install -e ".[dev]"
-python -m pytest -v
+python -m pip install -e ".[dev]"
+python -m agent_execution_guard.demo
 ```
 
-Runs a demo on 5 scripted scenarios (no API keys needed) and prints metrics with and without protection.
+Runs a demo on 6 scripted scenarios (no API keys needed) and prints metrics with and without protection.
+
+### Windows setup
+
+From the project directory, create and activate a virtual environment before installing dependencies:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+Run Python tools as modules (for example, `python -m pytest`), rather than invoking their `.exe`
+launchers directly. Virtual environments contain absolute paths and must be recreated if the
+project directory is moved or renamed. To repair a moved environment, remove the project's `.venv`
+directory, then run the setup commands above again.
 
 ## Usage
 
 ```python
-from guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector, PlanAnalyzer, Mode
 
 policy = {
     'default': 'deny',
@@ -57,6 +75,67 @@ run_sql(query='DROP TABLE user')  # returns a [BLOCKED ...] message
 `call_tool` always raises `PolicyViolation` when blocked; `@guard.guarded` returns a `[BLOCKED ...]` message by default, or raises with `on_block='raise'`.
 URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']` in a tool rule to change this.
 
+## YAML policies
+
+Policies can be stored in a YAML file and are validated at load time: a typo in a key (for example `allow_domain` instead of `allow_domains`), an invalid regex or a missing `sqlglot` raises an error at startup instead of silently disabling a rule.
+
+```yaml
+# policies/example.yaml
+default: deny
+tools:
+  read_file:
+    allow_paths:
+      path: [/data]
+    deny_regex:
+      path: '\.env|id_rsa'
+  http_post:
+    allow_domains:
+      url: [api.internal.example.com]
+  run_sql:
+    sql_ops:
+      query: [SELECT]
+```
+
+```python
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector
+from agent_execution_guard.schema import load_policy
+
+guard = ExecutionGuard(ToolPolicyInspector(load_policy('policies/example.yaml')))
+```
+
+Requires `pip install -e ".[yaml]"`.
+
+## JSONL log
+
+Pass a sink to write every step as one JSON line:
+
+```python
+from agent_execution_guard import ExecutionGuard, ToolPolicyInspector
+from agent_execution_guard.sinks import JsonlSink, export_trajectories
+
+guard = ExecutionGuard(ToolPolicyInspector(policy), sink=JsonlSink('logs/run.jsonl'))
+...
+export_trajectories([guard.traj], 'logs/trajectories.jsonl')
+```
+
+Each record has `run_id`, timestamp, event kind, tool, arguments, violations and `blocked`. Long values are truncated. A failing sink never breaks the agent; the error goes to the `agent_execution_guard` logger.
+
+## Tool output inspection
+
+Arguments are not the only attack surface: web pages, emails and files returned by tools can carry instructions (indirect prompt injection) or secrets. Enable the output check:
+
+```python
+from agent_execution_guard.output import OutputInspector
+
+guard = ExecutionGuard(inspector, mode=Mode.BLOCK, output_inspector=OutputInspector())
+```
+
+In `block` mode secrets are replaced with `[REDACTED]` and outputs that look like injection are withheld; in `warn` and `log_only` modes the output is passed through and the finding is recorded as a `tool_result` event.
+
+## Policy errors fail early
+
+Unknown keys, invalid regexes, invalid `default` values and `sql_ops` rules without `sqlglot` installed raise an error when the inspector is created, not on the first tool call.
+
 ## Metrics
 
 | Metric | Meaning |
@@ -66,13 +145,14 @@ URL rules allow only `https` by default; set `'allow_schemes': ['https', 'http']
 | Unsafe Planning Rate | Share of planning steps flagged as unsafe |
 | False positive rate | Share of benign runs with any flagged step |
 | Utility | Share of benign runs with no blocked call |
+| Tainted Tool Output Rate | Share of attack runs where a tool output contained a secret or an injection |
 
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 python -m pytest -v
-python -m pytest --cov=guard --cov-report=term-missing
+python -m pytest --cov --cov-report=term-missing
 ```
 
 ## Limitations
@@ -85,11 +165,15 @@ python -m pytest --cov=guard --cov-report=term-missing
 - URL checks validate the string only, not the final IP after DNS resolution or redirects, so DNS rebinding and open redirects are not covered.
 - Regex rules on code (`deny_regex` for tools like `execute_code`) are not a security boundary and are trivially bypassed. Run untrusted code only in a sandbox (a container with no network and a restricted filesystem), or deny the tool entirely. In the demo policy `execute_code` is denied by default.
 - The current trajectory is stored per execution context (`contextvars`). Call `guard.start()` in each thread or asyncio task. If tools are run in a separate thread pool (for example via `ThreadPoolExecutor.submit` or `loop.run_in_executor`), the context is not copied automatically: use `asyncio.to_thread` or `contextvars.copy_context().run(...)`.
-- Tool functions with `*args` cannot be matched to policy arguments; use named parameters
+- Tool functions with `*args` cannot be matched to policy arguments; use named parameters.
+- JSONL logs contain tool arguments (truncated); treat logs/ as sensitive.
+- Output checks are pattern-based and can be bypassed by rephrasing or encoding; they are a safety net, not a boundary. Stronger defenses against indirect prompt injection are least privilege after untrusted data (restrict which tools may run once the context contains web or email content) and clear separation of data from instructions.
 
 ## Roadmap
 
 - [x] Positional-arg inspection, SQL parsing, path and URL checks
-- [ ] LangGraph adapter
+- [x] Package layout, validated policies, YAML loading
+- [x] JSONL log and trajectory export
+- [x] Tool output inspection
+- [ ] LangChain / LangGraph / MCP adapters
 - [ ] Evaluation on AgentDojo / AgentHarm
-- [ ] YAML policy loading

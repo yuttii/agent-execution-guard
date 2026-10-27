@@ -1,14 +1,10 @@
 import asyncio
-import sys
 import threading
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-from guard import (
-    DEMO_POLICY,
+from agent_execution_guard import (
     ExecutionGuard,
     Mode,
     PlanAnalyzer,
@@ -18,8 +14,8 @@ from guard import (
     Trajectory,
     compute_metrics,
     print_report,
-    run_scenarios,
 )
+from agent_execution_guard.demo import DEMO_POLICY, run_scenarios
 
 # fixtures
 
@@ -227,7 +223,7 @@ def test_allow_paths_null_byte_and_empty_blocked(tmp_path):
 
 
 def _url_inspector(domains=('example.com',)):
-    return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list[domains]}}}})
+    return ToolPolicyInspector({'tools': {'http_post': {'allow_domains': {'url': list(domains)}}}})
 
 
 def test_url_http_scheme_blocked():
@@ -633,7 +629,7 @@ def test_run_scenarios_baseline_vs_protected():
 
 def test_run_scenarios_returns_all_trajectories():
     trajs = run_scenarios(Mode.BLOCK)
-    assert len(trajs) == 5
+    assert len(trajs) == 6
     assert sum(t.is_malicious_task for t in trajs)
     assert all(t.events[-1].kind == 'final' for t in trajs)
 
@@ -733,26 +729,6 @@ def test_regression_malformed_url_blocked():
     assert insp.check('http_post', {'url': 'https://['})
 
 
-# coverage: remaining branches
-
-
-def test_as_list_none_and_scalars():
-    as_list = ToolPolicyInspector._as_list
-    assert as_list(None) == []
-    assert as_list('a.com') == ['a.com']
-    assert as_list(5) == [5]
-    assert as_list(['a', 'b']) == ['a', 'b']
-    assert as_list(('a',)) == ['a']
-
-
-def test_as_list_generic_alias_flattens_nested_lists():
-    class FakeAlias:
-        __origin__ = list
-        __args__ = (['a', 'b'], 'c')
-
-    assert ToolPolicyInspector._as_list(FakeAlias()) == ['a', 'b', 'c']
-
-
 def test_url_problems_without_host():
     assert ToolPolicyInspector._url_problems('https:///path', ['https']) == []
     assert ToolPolicyInspector._url_problems('file:///etc/passwd', ['https']) == [
@@ -766,3 +742,11 @@ def test_path_allowed_handles_oserror(monkeypatch, tmp_path):
 
     monkeypatch.setattr(Path, 'resolve', boom)
     assert ToolPolicyInspector._path_allowed(str(tmp_path), [str(tmp_path)]) is False
+
+
+def test_demo_main_runs(capsys):
+    from agent_execution_guard.demo import main
+
+    main()
+    out = capsys.readouterr().out
+    assert 'WITH protection' in out
