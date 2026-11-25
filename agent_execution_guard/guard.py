@@ -3,7 +3,8 @@ from __future__ import annotations
 import functools
 import inspect
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
@@ -26,6 +27,10 @@ def _collect_args(sig: inspect.Signature, a: tuple, kw: dict) -> dict[str, Any]:
             out[pname] = val
     return out
 
+def format_block(violations: list[str], reveal: bool = True) -> str:
+    if reveal:
+        return f'[BLOCKED by Agent-Execution-Guard: {"; ".join(violations)}]'
+    return '[BLOCKED by Agent-Execution-Guard: this action is not allowed]'
 
 class ExecutionGuard:
     def __init__(
@@ -74,6 +79,24 @@ class ExecutionGuard:
         t = Trajectory(name=name, is_malicious_task=is_malicious_task)
         self._traj_var.set(t)
         return t
+
+    @contextmanager
+    def run(self, name: str, is_malicious_task: bool = False) -> Iterator[Trajectory]:
+        t = Trajectory(name=name, is_malicious_task=is_malicious_task)
+        token = self._traj_var.set(t)
+        try:
+            yield t
+        finally:
+            self._traj_var.reset(token)
+
+    def require_run(self) -> Trajectory:
+        traj = self.traj
+        if traj is None:
+            raise RuntimeError(
+                'no active trajectory: call guard.start() or use "with guard.run(...)" '
+                'before invoking the agent (not inside a graph node)'
+            )
+        return traj
 
     def _add(self, **kw) -> StepEvent:
         assert self.traj is not None, 'call start() first'
@@ -151,7 +174,7 @@ class ExecutionGuard:
                 if ev.blocked:
                     if on_block == 'raise':
                         raise PolicyViolation(ev.violations)
-                    return f'[BLOCKED by Agent-Execution-Guard: {"; ".join(ev.violations)}]'
+                    return format_block(ev.violations)
                 return self.after_tool_call(tool_name, fn(*a, **kw))
 
             return wrapper

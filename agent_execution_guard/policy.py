@@ -108,6 +108,9 @@ class ToolPolicyInspector:
                     out.append(f'{tool}.{arg} nested SQL op "{nop}" not allowed')
         return out
 
+    def is_tool_allowed(self, tool: str) -> bool:
+        return tool in self.tools or self.default == 'allow'
+
     def check(self, tool: str, args: dict[str, Any]) -> list[str]:
         rule = self.tools.get(tool)
         if rule is None:

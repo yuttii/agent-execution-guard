@@ -750,3 +750,31 @@ def test_demo_main_runs(capsys):
     main()
     out = capsys.readouterr().out
     assert 'WITH protection' in out
+
+def test_format_block_reveal_and_hide():
+    from agent_execution_guard.guard import format_block
+
+    assert 'DROP' in format_block(['DROP not allowed'])
+    assert 'DROP' not in format_block(['DROP not allowed'], reveal=False)
+    assert format_block([], reveal=False).startswith('[BLOCKED by Agent-Execution-Guard:')
+
+
+def test_run_context_manager_scopes_trajectory(inspector):
+    g = ExecutionGuard(inspector)
+    with g.run('r1', is_malicious_task=True) as t:
+        assert g.traj is t and t.is_malicious_task
+        g.before_plan('x')
+    assert g.traj is None
+    assert len(t.events) == 1
+
+
+def test_require_run_raises_without_trajectory(inspector):
+    g = ExecutionGuard(inspector)
+    with pytest.raises(RuntimeError, match='no active trajectory'):
+        g.require_run()
+
+
+def test_is_tool_allowed(inspector):
+    assert inspector.is_tool_allowed('run_sql')
+    assert not inspector.is_tool_allowed('format_disk')
+    assert ToolPolicyInspector({'default': 'allow'}).is_tool_allowed('anything')

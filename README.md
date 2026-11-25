@@ -175,5 +175,3 @@ python -m pytest --cov --cov-report=term-missing
 - [x] Package layout, validated policies, YAML loading
 - [x] JSONL log and trajectory export
 - [x] Tool output inspection
-- [ ] LangChain / LangGraph / MCP adapters
-- [ ] Evaluation on AgentDojo / AgentHarm
